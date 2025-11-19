@@ -18,7 +18,7 @@ import {
 // --- LeanCloud Configuration ---
 const LEANCLOUD_APP_ID = "SlkrSn4s7FKA0eNVXIoBcIet-MdYXbMMI";
 const LEANCLOUD_APP_KEY = "bhOzh71Xc5CJSMFhhw4W6cPe";
-const LEANCLOUD_SERVER_URL = "https://avoscloud.com"; // 国际版通用API域名
+const LEANCLOUD_SERVER_URL = "https://leancloud.app/"; // 国际版通用API域名
 
 export default function ParcelTracker() {
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
