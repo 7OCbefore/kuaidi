@@ -12,19 +12,18 @@ import {
   Copy,
   X,
   RefreshCw,
-  AlertCircle,
+  Smartphone,
 } from "lucide-react";
 
-// --- LeanCloud Configuration ---
-const LEANCLOUD_APP_ID = "SlkrSn4s7FKA0eNVXIoBcIet-MdYXbMMI";
-const LEANCLOUD_APP_KEY = "bhOzh71Xc5CJSMFhhw4W6cPe";
-const LEANCLOUD_SERVER_URL = "https://slkrsn4s.api.lncldglobal.com";
+// --- Supabase 配置 ---
+const SUPABASE_URL = "https://pipclbhznsjiftaijztl.supabase.co";
+const SUPABASE_KEY = "sb_secret_TRkfi36JpFISwJvU-qYdSg_uKAedAesy";
 
 export default function ParcelTracker() {
-  const [isSDKLoaded, setIsSDKLoaded] = useState(false);
+  const [isReady, setIsReady] = useState(false);
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [userId, setUserId] = useState("");
 
   // Form States
   const [trackingNum, setTrackingNum] = useState("");
@@ -39,83 +38,62 @@ export default function ParcelTracker() {
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [toast, setToast] = useState(null);
 
-  // --- 1. Load LeanCloud SDK via CDN ---
+  // --- 1. 初始化 Supabase & 用户身份 ---
   useEffect(() => {
-    // 检查是否已经加载
-    if (window.AV) {
-      setIsSDKLoaded(true);
-      return;
+    // 1.1 获取或创建用户唯一标识 (模拟账户系统，无需登录)
+    let storedUserId = localStorage.getItem("parcel_user_id");
+    if (!storedUserId) {
+      storedUserId =
+        "user_" +
+        Math.random().toString(36).substr(2, 9) +
+        Date.now().toString(36);
+      localStorage.setItem("parcel_user_id", storedUserId);
     }
+    setUserId(storedUserId);
 
-    const script = document.createElement("script");
-    script.src =
-      "https://cdn.jsdelivr.net/npm/leancloud-storage@4.15.0/dist/av-min.js";
-    script.async = true;
-    script.onload = () => {
-      // 初始化
-      if (!window.AV.applicationId) {
-        window.AV.init({
-          appId: LEANCLOUD_APP_ID,
-          appKey: LEANCLOUD_APP_KEY,
-          serverURL: LEANCLOUD_SERVER_URL,
-        });
-      }
-      setIsSDKLoaded(true);
-    };
-    script.onerror = () => setError("无法加载云端服务，请检查网络连接");
-    document.body.appendChild(script);
-
-    return () => {
-      // Cleanup if needed
-    };
+    // 1.2 动态加载 Supabase SDK
+    if (window.supabase) {
+      setIsReady(true);
+    } else {
+      const script = document.createElement("script");
+      script.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
+      script.async = true;
+      script.onload = () => setIsReady(true);
+      document.body.appendChild(script);
+    }
   }, []);
 
-  // --- Data Fetching ---
+  // --- 2. 数据同步 ---
   const fetchPackages = async () => {
-    if (!isSDKLoaded || !window.AV) return;
-
+    if (!isReady || !userId) return;
     setLoading(true);
-    setError(null);
+
     try {
-      const query = new window.AV.Query("Package");
-      query.descending("createdAt");
-      query.limit(100);
-      const results = await query.find();
+      const { createClient } = window.supabase;
+      const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-      const pkgs = results.map((obj) => ({
-        id: obj.id,
-        ...obj.toJSON(),
-        createdAt: obj.createdAt,
-        _avObject: obj,
-      }));
+      // 查询当前用户的快递
+      const { data, error } = await supabase
+        .from("packages")
+        .select("*")
+        .eq("user_id", userId) // 🔒 只看自己的数据
+        .order("created_at", { ascending: false });
 
-      // Local sort
-      pkgs.sort((a, b) => {
-        if (a.status === "pending" && b.status !== "pending") return -1;
-        if (a.status !== "pending" && b.status === "pending") return 1;
-        return new Date(b.createdAt) - new Date(a.createdAt);
-      });
-
-      setPackages(pkgs);
+      if (error) throw error;
+      setPackages(data || []);
     } catch (err) {
       console.error("Fetch error:", err);
-      // 如果是 401 错误，通常是 AppID 没填对
-      if (err.code === 401) {
-        setError("认证失败：请检查代码中的 AppID 和 AppKey 是否填写正确");
-      } else {
-        setError("数据获取失败，请检查网络");
-      }
+      showToast("连接失败，请检查网络");
     } finally {
       setLoading(false);
     }
   };
 
-  // Load data once SDK is ready
   useEffect(() => {
-    if (isSDKLoaded) {
+    if (isReady && userId) {
       fetchPackages();
     }
-  }, [isSDKLoaded]);
+  }, [isReady, userId]);
 
   // --- Helper: Toast ---
   const showToast = (message) => {
@@ -126,18 +104,24 @@ export default function ParcelTracker() {
   // --- Actions ---
   const handleAddPackage = async (e) => {
     e.preventDefault();
-    if (!trackingNum.trim() || !itemName.trim() || !window.AV) return;
+    if (!trackingNum.trim() || !itemName.trim() || !isReady) return;
 
     try {
-      const Package = window.AV.Object.extend("Package");
-      const pkg = new Package();
-      pkg.set("trackingNum", trackingNum);
-      pkg.set("itemName", itemName);
-      pkg.set("recipient", recipient);
-      pkg.set("sender", sender);
-      pkg.set("status", "pending");
+      const { createClient } = window.supabase;
+      const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-      await pkg.save();
+      const { error } = await supabase.from("packages").insert([
+        {
+          user_id: userId, // 绑定到当前用户
+          tracking_num: trackingNum,
+          item_name: itemName,
+          recipient: recipient,
+          sender: sender,
+          status: "pending",
+        },
+      ]);
+
+      if (error) throw error;
 
       setTrackingNum("");
       setItemName("");
@@ -145,48 +129,55 @@ export default function ParcelTracker() {
       setSender("");
       setIsFormOpen(false);
       showToast("添加成功");
-      fetchPackages();
+      fetchPackages(); // 刷新列表
     } catch (error) {
       console.error("Error adding:", error);
-      alert("添加失败: " + error.message);
+      alert("添加失败，请重试");
     }
   };
 
   const toggleStatus = async (pkg, e) => {
     e.stopPropagation();
-    if (!window.AV) return;
+    if (!isReady) return;
 
     const newStatus = pkg.status === "pending" ? "received" : "pending";
-    const oldPackages = [...packages];
 
-    // Optimistic update
+    // 乐观更新
+    const oldPackages = [...packages];
     setPackages((pkgs) =>
-      pkgs.map((p) => {
-        if (p.id === pkg.id) return { ...p, status: newStatus };
-        return p;
-      })
+      pkgs.map((p) => (p.id === pkg.id ? { ...p, status: newStatus } : p))
     );
 
     try {
-      const todo = window.AV.Object.createWithoutData("Package", pkg.id);
-      todo.set("status", newStatus);
-      await todo.save();
+      const { createClient } = window.supabase;
+      const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+      const { error } = await supabase
+        .from("packages")
+        .update({ status: newStatus })
+        .eq("id", pkg.id);
+
+      if (error) throw error;
       showToast(newStatus === "received" ? "已确认收货" : "已标记为未收");
     } catch (error) {
-      console.error("Update error:", error);
-      setPackages(oldPackages);
-      showToast("操作失败，请重试");
+      setPackages(oldPackages); // 回滚
+      showToast("操作失败");
     }
   };
 
   const handleDelete = async (id) => {
-    if (!window.AV) return;
+    if (!isReady) return;
     try {
-      const todo = window.AV.Object.createWithoutData("Package", id);
-      await todo.destroy();
+      const { createClient } = window.supabase;
+      const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+      const { error } = await supabase.from("packages").delete().eq("id", id);
+
+      if (error) throw error;
+
       setDeleteConfirmId(null);
-      showToast("已删除记录");
       setPackages((prev) => prev.filter((p) => p.id !== id));
+      showToast("已删除");
     } catch (error) {
       console.error("Delete error:", error);
       alert("删除失败");
@@ -212,8 +203,8 @@ export default function ParcelTracker() {
   const filteredPackages = useMemo(() => {
     return packages.filter((pkg) => {
       const matchesSearch =
-        pkg.trackingNum.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        pkg.itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        pkg.tracking_num?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        pkg.item_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (pkg.recipient &&
           pkg.recipient.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (pkg.sender &&
@@ -234,41 +225,12 @@ export default function ParcelTracker() {
 
   // --- UI Components ---
 
-  // Initial Loading State
-  if (!isSDKLoaded || (loading && packages.length === 0)) {
+  if (loading && packages.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="flex flex-col items-center gap-4 p-6 bg-white rounded-2xl shadow-sm">
+        <div className="flex flex-col items-center gap-3">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
-          <div className="text-center">
-            <p className="text-gray-600 font-medium">
-              {isSDKLoaded
-                ? "正在同步云端数据..."
-                : "正在连接 LeanCloud 服务..."}
-            </p>
-            <p className="text-gray-400 text-xs mt-1">这通常需要几秒钟</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Error State
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50 px-4">
-        <div className="text-center p-8 bg-white rounded-3xl shadow-lg max-w-sm w-full">
-          <div className="bg-red-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-            <AlertCircle className="w-8 h-8 text-red-500" />
-          </div>
-          <h3 className="text-xl font-bold text-gray-800 mb-2">连接遇到问题</h3>
-          <p className="text-gray-500 mb-8 text-sm leading-relaxed">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="w-full px-4 py-3.5 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
-          >
-            刷新页面重试
-          </button>
+          <p className="text-gray-400 text-sm">正在连接 Supabase...</p>
         </div>
       </div>
     );
@@ -298,8 +260,7 @@ export default function ParcelTracker() {
             </h1>
             <button
               onClick={fetchPackages}
-              className="p-2.5 bg-white border border-gray-200 rounded-full hover:bg-gray-50 active:scale-95 transition-all shadow-sm text-gray-500 hover:text-indigo-600"
-              title="刷新列表"
+              className="p-2.5 bg-white border border-gray-200 rounded-full text-gray-500 hover:text-indigo-600"
             >
               <RefreshCw
                 className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
@@ -307,7 +268,7 @@ export default function ParcelTracker() {
             </button>
           </div>
 
-          {/* Stats Cards */}
+          {/* Stats */}
           <div className="grid grid-cols-2 gap-4">
             <button
               onClick={() =>
@@ -374,9 +335,8 @@ export default function ParcelTracker() {
         </div>
       </div>
 
-      {/* Main Content */}
+      {/* Main */}
       <div className="max-w-2xl mx-auto px-4 mt-6 space-y-6">
-        {/* Search Bar */}
         <div className="relative group">
           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
             <Search className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500 transition-colors duration-300" />
@@ -390,7 +350,7 @@ export default function ParcelTracker() {
           />
         </div>
 
-        {/* Package List */}
+        {/* List */}
         <div className="space-y-4">
           {filteredPackages.map((pkg) => (
             <div
@@ -401,7 +361,6 @@ export default function ParcelTracker() {
                   : "border-transparent bg-gray-50/50 opacity-75 hover:opacity-100"
               }`}
             >
-              {/* Status Indicator Stripe */}
               <div
                 className={`absolute left-0 top-0 bottom-0 w-1.5 transition-colors ${
                   pkg.status === "pending" ? "bg-orange-400" : "bg-gray-200"
@@ -409,7 +368,6 @@ export default function ParcelTracker() {
               ></div>
 
               <div className="pl-3 flex flex-col gap-3">
-                {/* Header Row */}
                 <div className="flex justify-between items-start">
                   <div className="flex-1 min-w-0 mr-3">
                     <h3
@@ -419,14 +377,14 @@ export default function ParcelTracker() {
                           : "text-gray-800"
                       }`}
                     >
-                      {pkg.itemName}
+                      {pkg.item_name}
                     </h3>
                     <div
-                      onClick={(e) => copyToClipboard(pkg.trackingNum, e)}
+                      onClick={(e) => copyToClipboard(pkg.tracking_num, e)}
                       className="inline-flex items-center gap-2 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors group/pill border border-gray-200/50"
                     >
                       <span className="text-xs font-mono text-gray-600 font-semibold tracking-wide truncate max-w-[150px] sm:max-w-none">
-                        {pkg.trackingNum}
+                        {pkg.tracking_num}
                       </span>
                       <Copy className="w-3.5 h-3.5 text-gray-400 group-hover/pill:text-indigo-500 transition-colors" />
                     </div>
@@ -439,9 +397,6 @@ export default function ParcelTracker() {
                         ? "bg-orange-50 text-orange-500 hover:bg-orange-500 hover:text-white hover:shadow-orange-200 ring-1 ring-orange-100"
                         : "bg-emerald-50 text-emerald-500 hover:bg-emerald-500 hover:text-white ring-1 ring-emerald-100"
                     }`}
-                    title={
-                      pkg.status === "pending" ? "点击确认收货" : "点击标记未收"
-                    }
                   >
                     {pkg.status === "pending" ? (
                       <Truck className="w-5 h-5" />
@@ -451,7 +406,6 @@ export default function ParcelTracker() {
                   </button>
                 </div>
 
-                {/* Metadata Row */}
                 {(pkg.recipient || pkg.sender) && (
                   <div className="flex flex-wrap gap-2">
                     {pkg.recipient && (
@@ -469,11 +423,10 @@ export default function ParcelTracker() {
                   </div>
                 )}
 
-                {/* Footer Row */}
                 <div className="flex items-center justify-between pt-3 mt-1 border-t border-gray-50">
                   <div className="text-[11px] text-gray-400 font-medium flex items-center">
-                    {pkg.createdAt
-                      ? new Date(pkg.createdAt).toLocaleDateString()
+                    {pkg.created_at
+                      ? new Date(pkg.created_at).toLocaleDateString()
                       : ""}
                     {pkg.status === "received" && (
                       <span className="ml-2 text-emerald-500">已完成</span>
@@ -484,7 +437,7 @@ export default function ParcelTracker() {
                     {deleteConfirmId === pkg.id ? (
                       <div className="flex items-center gap-3 animate-in fade-in slide-in-from-right-4 duration-200 bg-red-50 px-3 py-1 rounded-full">
                         <span className="text-xs text-red-500 font-bold">
-                          确定删除?
+                          删除?
                         </span>
                         <button
                           onClick={(e) => {
@@ -495,13 +448,12 @@ export default function ParcelTracker() {
                         >
                           是
                         </button>
-                        <div className="w-px h-3 bg-red-200"></div>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             setDeleteConfirmId(null);
                           }}
-                          className="p-0.5 text-red-400 hover:text-red-600"
+                          className="p-0.5 text-red-400"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
@@ -513,7 +465,6 @@ export default function ParcelTracker() {
                           setDeleteConfirmId(pkg.id);
                         }}
                         className="text-gray-300 hover:text-red-400 transition-colors p-2 hover:bg-red-50 rounded-full"
-                        title="删除"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -523,30 +474,27 @@ export default function ParcelTracker() {
               </div>
             </div>
           ))}
-          <div className="h-24"></div> {/* Bottom Spacer */}
+          <div className="h-24"></div>
         </div>
       </div>
 
-      {/* FAB (Floating Action Button) */}
+      {/* FAB */}
       <button
         onClick={() => setIsFormOpen(true)}
-        className="fixed bottom-8 right-6 bg-indigo-600 text-white w-16 h-16 rounded-full shadow-2xl shadow-indigo-500/40 hover:bg-indigo-700 hover:scale-110 hover:-translate-y-1 transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-indigo-500/30 z-20 flex items-center justify-center group"
+        className="fixed bottom-8 right-6 bg-indigo-600 text-white w-16 h-16 rounded-full shadow-2xl shadow-indigo-500/40 hover:bg-indigo-700 hover:scale-110 hover:-translate-y-1 transition-all z-20 flex items-center justify-center group"
       >
         <Plus className="w-8 h-8 group-hover:rotate-90 transition-transform duration-300" />
       </button>
 
-      {/* Add Modal - Bottom Sheet */}
+      {/* Modal */}
       {isFormOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div
-            className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300"
+            className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"
             onClick={() => setIsFormOpen(false)}
           ></div>
-
           <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 sm:p-8 shadow-2xl relative z-10 animate-in slide-in-from-bottom duration-300 flex flex-col max-h-[90vh]">
-            {/* Drag Handle */}
             <div className="w-16 h-1.5 bg-gray-200 rounded-full mx-auto mb-8 sm:hidden opacity-50"></div>
-
             <div className="flex justify-between items-center mb-8">
               <h2 className="text-2xl font-extrabold text-gray-800">
                 录入新快递
@@ -558,38 +506,35 @@ export default function ParcelTracker() {
                 <X className="w-6 h-6" />
               </button>
             </div>
-
             <form
               onSubmit={handleAddPackage}
               className="space-y-6 overflow-y-auto pb-4"
             >
               <div className="space-y-1.5">
                 <label className="block text-sm font-bold text-gray-700 ml-1">
-                  快递单号 <span className="text-red-500">*</span>
+                  快递单号 *
                 </label>
                 <input
                   type="text"
                   value={trackingNum}
                   onChange={(e) => setTrackingNum(e.target.value)}
-                  placeholder="点击此处，支持键盘扫描..."
-                  className="block w-full p-4 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all font-mono text-lg tracking-wide placeholder-gray-400 shadow-sm"
+                  className="block w-full p-4 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none font-mono text-lg"
+                  placeholder="点击扫描..."
                   autoFocus
                 />
               </div>
-
               <div className="space-y-1.5">
                 <label className="block text-sm font-bold text-gray-700 ml-1">
-                  物品描述 <span className="text-red-500">*</span>
+                  物品描述 *
                 </label>
                 <input
                   type="text"
                   value={itemName}
                   onChange={(e) => setItemName(e.target.value)}
-                  placeholder="例如：红色衣服"
-                  className="block w-full p-4 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all placeholder-gray-400 shadow-sm"
+                  className="block w-full p-4 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none"
+                  placeholder="例如：文件"
                 />
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="block text-sm font-bold text-gray-700 ml-1">
@@ -599,28 +544,27 @@ export default function ParcelTracker() {
                     type="text"
                     value={recipient}
                     onChange={(e) => setRecipient(e.target.value)}
+                    className="block w-full p-3.5 bg-gray-50 rounded-2xl outline-none text-sm"
                     placeholder="选填"
-                    className="block w-full p-3.5 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all text-sm shadow-sm"
                   />
                 </div>
                 <div className="space-y-1.5">
                   <label className="block text-sm font-bold text-gray-700 ml-1">
-                    发件人/备注
+                    发件人
                   </label>
                   <input
                     type="text"
                     value={sender}
                     onChange={(e) => setSender(e.target.value)}
+                    className="block w-full p-3.5 bg-gray-50 rounded-2xl outline-none text-sm"
                     placeholder="选填"
-                    className="block w-full p-3.5 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all text-sm shadow-sm"
                   />
                 </div>
               </div>
-
               <button
                 type="submit"
                 disabled={!trackingNum || !itemName}
-                className="w-full bg-indigo-600 text-white py-4.5 rounded-2xl font-bold text-lg shadow-xl shadow-indigo-500/30 hover:bg-indigo-700 hover:shadow-indigo-600/40 hover:-translate-y-0.5 active:scale-[0.98] disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none disabled:cursor-not-allowed disabled:translate-y-0 mt-4 transition-all"
+                className="w-full bg-indigo-600 text-white py-4.5 rounded-2xl font-bold text-lg mt-4 disabled:bg-gray-100"
               >
                 确认添加
               </button>
