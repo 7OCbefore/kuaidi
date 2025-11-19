@@ -12,7 +12,7 @@ import {
   Copy, 
   X,
   RefreshCw,
-  Smartphone
+  AlertCircle
 } from 'lucide-react';
 
 // --- Supabase 配置 ---
@@ -25,6 +25,9 @@ export default function ParcelTracker() {
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState('');
   
+  // 配置检查状态
+  const [configError, setConfigError] = useState(false);
+
   // Form States
   const [trackingNum, setTrackingNum] = useState('');
   const [itemName, setItemName] = useState('');
@@ -36,10 +39,11 @@ export default function ParcelTracker() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  
+  // Toast State: null | { msg: string, type: 'success' | 'error' }
   const [toast, setToast] = useState(null);
 
-  // --- 0. 自动加载样式引擎 (Tailwind CSS) ---
-  // 💡 这段代码修复了“页面简陋”的问题
+  // --- 0. 自动加载样式引擎 ---
   useEffect(() => {
     if (!document.getElementById('tailwind-script')) {
       const script = document.createElement('script');
@@ -52,6 +56,14 @@ export default function ParcelTracker() {
 
   // --- 1. 初始化 Supabase & 用户身份 ---
   useEffect(() => {
+    // 1.1 检查配置是否已替换
+    if (SUPABASE_URL.includes("你的项目ID") || SUPABASE_KEY.includes("你的AnonKey")) {
+      setConfigError(true);
+      setLoading(false);
+      return;
+    }
+
+    // 1.2 用户指纹
     let storedUserId = localStorage.getItem('parcel_user_id');
     if (!storedUserId) {
       storedUserId = 'user_' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
@@ -59,6 +71,7 @@ export default function ParcelTracker() {
     }
     setUserId(storedUserId);
 
+    // 1.3 加载 SDK
     if (window.supabase) {
       setIsReady(true);
     } else {
@@ -66,13 +79,14 @@ export default function ParcelTracker() {
       script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
       script.async = true;
       script.onload = () => setIsReady(true);
+      script.onerror = () => showToast("Supabase SDK 加载失败，请检查网络", 'error');
       document.body.appendChild(script);
     }
   }, []);
 
   // --- 2. 数据同步 ---
   const fetchPackages = async () => {
-    if (!isReady || !userId) return;
+    if (!isReady || !userId || configError) return;
     setLoading(true);
     
     try {
@@ -89,7 +103,12 @@ export default function ParcelTracker() {
       setPackages(data || []);
     } catch (err) {
       console.error("Fetch error:", err);
-      showToast("连接失败，请检查网络");
+      // 智能判断错误类型
+      if (err.message === "Failed to fetch") {
+        showToast("连接失败，您的网络可能无法访问数据库", 'error');
+      } else {
+        showToast(`数据错误: ${err.message}`, 'error');
+      }
     } finally {
       setLoading(false);
     }
@@ -102,9 +121,9 @@ export default function ParcelTracker() {
   }, [isReady, userId]);
 
   // --- Helper: Toast ---
-  const showToast = (message) => {
-    setToast(message);
-    setTimeout(() => setToast(null), 2000);
+  const showToast = (msg, type = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
   };
 
   // --- Actions ---
@@ -136,11 +155,11 @@ export default function ParcelTracker() {
       setRecipient('');
       setSender('');
       setIsFormOpen(false);
-      showToast("添加成功");
+      showToast("添加成功", 'success');
       fetchPackages();
     } catch (error) {
       console.error("Error adding:", error);
-      alert("添加失败，请重试");
+      showToast(`添加失败: ${error.message}`, 'error');
     }
   };
 
@@ -162,10 +181,10 @@ export default function ParcelTracker() {
         .eq('id', pkg.id);
 
       if (error) throw error;
-      showToast(newStatus === 'received' ? "已确认收货" : "已标记为未收");
+      showToast(newStatus === 'received' ? "已确认收货" : "已标记为未收", 'success');
     } catch (error) {
       setPackages(oldPackages);
-      showToast("操作失败");
+      showToast("操作失败，请检查网络", 'error');
     }
   };
 
@@ -184,10 +203,9 @@ export default function ParcelTracker() {
 
       setDeleteConfirmId(null);
       setPackages(prev => prev.filter(p => p.id !== id));
-      showToast("已删除");
+      showToast("已删除", 'success');
     } catch (error) {
-      console.error("Delete error:", error);
-      alert("删除失败");
+      showToast("删除失败", 'error');
     }
   };
 
@@ -199,7 +217,7 @@ export default function ParcelTracker() {
     textArea.select();
     try {
       document.execCommand('copy');
-      showToast("单号已复制");
+      showToast("单号已复制", 'success');
     } catch (err) {
       console.error('Unable to copy', err);
     }
@@ -230,12 +248,35 @@ export default function ParcelTracker() {
 
   // --- UI Components ---
 
+  // 0. 配置未填写错误
+  if (configError) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-red-50 px-4">
+        <div className="bg-white p-6 rounded-2xl shadow-lg max-w-md w-full text-center">
+          <div className="bg-red-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="w-8 h-8 text-red-500" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">配置尚未完成</h2>
+          <p className="text-gray-600 mb-4 text-sm text-left">
+            你还没有在代码中填入 Supabase 的连接信息。请回到代码编辑器，找到 <code>const SUPABASE_URL</code> 这一行。
+          </p>
+          <div className="bg-gray-100 p-3 rounded text-xs font-mono text-left text-gray-500 break-all">
+             // 请填入你在 Supabase 设置里获取的 Key<br/>
+             const SUPABASE_URL = "https://....";<br/>
+             const SUPABASE_KEY = "eyJh....";
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 1. 加载中
   if (loading && packages.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
         <div className="flex flex-col items-center gap-3">
            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
-           <p className="text-gray-400 text-sm">正在连接 Supabase...</p>
+           <p className="text-gray-400 text-sm">正在连接云端...</p>
         </div>
       </div>
     );
@@ -243,12 +284,20 @@ export default function ParcelTracker() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24 font-sans text-gray-900 selection:bg-indigo-100">
-      {/* Toast */}
+      {/* Toast - 动态样式 */}
       {toast && (
         <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-2 duration-300 w-auto whitespace-nowrap">
-          <div className="bg-gray-900/90 backdrop-blur-sm text-white px-5 py-2.5 rounded-full shadow-xl text-sm font-medium flex items-center gap-2.5">
-            <CheckCircle2 className="w-4 h-4 text-green-400" />
-            {toast}
+          <div className={`backdrop-blur-sm px-5 py-2.5 rounded-full shadow-xl text-sm font-medium flex items-center gap-2.5 border ${
+            toast.type === 'error' 
+              ? 'bg-red-50/95 text-red-800 border-red-200' 
+              : 'bg-gray-900/90 text-white border-transparent'
+          }`}>
+            {toast.type === 'error' ? (
+              <AlertCircle className="w-4 h-4 text-red-500" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 text-green-400" />
+            )}
+            {toast.msg}
           </div>
         </div>
       )}
