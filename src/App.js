@@ -17,7 +17,7 @@ import {
 
 // --- Supabase 配置 ---
 const SUPABASE_URL = "https://pipclbhznsjiftaijztl.supabase.co";
-const SUPABASE_KEY = "sb_secret_TRkfi36JpFISwJvU-qYdSg_uKAedAesy";
+const SUPABASE_KEY = "sb_publishable_NVrCIbylU2uBdojQ3DUGbQ_c00IKvFv";
 
 export default function ParcelTracker() {
   const [isReady, setIsReady] = useState(false);
