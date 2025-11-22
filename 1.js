@@ -9,6 +9,7 @@ import {
 const SUPABASE_URL = "https://pipclbhznsjiftaijztl.supabase.co";
 const SUPABASE_KEY = "sb_publishable_NVrCIbylU2uBdojQ3DUGbQ_c00IKvFv";
 
+
 export default function InventoryManager() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
