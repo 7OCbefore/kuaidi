@@ -2,10 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Package, Plus, Search, Truck, CheckCircle2, 
   Clock, User, Trash2, X, WifiOff, Cloud, 
-  BarChart3, ChevronLeft, TrendingUp, Box, Send
+  BarChart3, ChevronLeft, TrendingUp, Send
 } from 'lucide-react';
 import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, AreaChart, Area 
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area 
 } from 'recharts';
 
 // --- Supabase 配置 ---
@@ -18,7 +18,7 @@ export default function ParcelTracker() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loginInput, setLoginInput] = useState('');
   
-  const [products, setProducts] = useState([]); // 物品库 (用于记忆价格)
+  const [products, setProducts] = useState([]); // 物品库
   const [items, setItems] = useState([]);       // 快递记录
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState('dashboard'); 
@@ -32,24 +32,25 @@ export default function ParcelTracker() {
   const [newItem, setNewItem] = useState({
     productId: null,
     productName: '', 
-    costPrice: '', // 这里代表“物品价值”
-    quantity: 1,   // 默认为1件
-    supplier: '',  // 这里代表“发件人”
+    costPrice: '', 
+    quantity: 1,
+    supplier: '',
     trackingNumber: '',
-    recipient: '', // 收件人
-    status: 'ordered' // ordered(待收), received(已收)
+    recipient: '',
+    status: 'ordered'
   });
   
   // 联想建议
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
-  // 0. 自动加载样式
+  // --- 0. 自动加载样式 (国内加速版) ---
   useEffect(() => {
     if (!document.getElementById('tailwind-script')) {
       const script = document.createElement('script');
       script.id = 'tailwind-script';
-      script.src = "https://cdn.tailwindcss.com";
+      // 🚀 关键修改：使用国内 Staticfile CDN 加速 Tailwind
+      script.src = "https://cdn.staticfile.net/tailwindcss/3.3.3/tailwind.min.js";
       script.async = true;
       document.head.appendChild(script);
     }
@@ -85,14 +86,12 @@ export default function ParcelTracker() {
         const { createClient } = window.supabase;
         const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
         
-        // 获取物品库 (用于自动补全价格)
         const { data: prodData } = await supabase
           .from('products')
           .select('*')
           .eq('user_id', householdId);
         setProducts(prodData || []);
 
-        // 获取快递记录
         const { data: pkgData, error } = await supabase
           .from('packages')
           .select('*')
@@ -101,16 +100,15 @@ export default function ParcelTracker() {
 
         if (error) throw error;
 
-        // 映射数据库字段到前端字段
         const formattedItems = pkgData.map(d => ({
           id: d.id,
           productId: d.product_id,
           productName: d.product_name,
-          costPrice: Number(d.cost_price), // 物品价值
+          costPrice: Number(d.cost_price),
           quantity: Number(d.quantity),
-          supplier: d.supplier,            // 发件人
+          supplier: d.supplier,
           trackingNumber: d.tracking_number,
-          recipient: d.recipient,          // 收件人
+          recipient: d.recipient,
           status: d.status,
           createdAt: d.created_at
         }));
@@ -133,7 +131,7 @@ export default function ParcelTracker() {
     if (isLoggedIn && householdId && (isSupabaseReady || isOffline)) fetchData();
   }, [isLoggedIn, householdId, isSupabaseReady, isOffline]);
 
-  // --- 核心逻辑：智能录入 ---
+  // --- 逻辑方法 ---
   const handleNameChange = (val) => {
     setNewItem(prev => ({ ...prev, productName: val, productId: null }));
     if (val.trim()) {
@@ -150,7 +148,7 @@ export default function ParcelTracker() {
       ...prev,
       productName: prod.name,
       productId: prod.id,
-      costPrice: prod.last_price || '' // 自动填入上次记录的价值
+      costPrice: prod.last_price || '' 
     }));
     setShowSuggestions(false);
   };
@@ -159,12 +157,10 @@ export default function ParcelTracker() {
     e.preventDefault();
     if (!newItem.productName) return;
 
-    // 1. 检查/创建物品库 (为了统计价格趋势)
     let finalProductId = newItem.productId;
     if (!finalProductId && !isOffline && isSupabaseReady && newItem.costPrice) {
       const { createClient } = window.supabase;
       const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-      
       const existing = products.find(p => p.name === newItem.productName);
       if (existing) {
         finalProductId = existing.id;
@@ -182,24 +178,20 @@ export default function ParcelTracker() {
       }
     }
 
-    // 2. 创建快递记录
     if (!isOffline && isSupabaseReady) {
       const { createClient } = window.supabase;
       const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-      
       await supabase.from('packages').insert([{
         user_id: householdId,
         product_id: finalProductId,
         product_name: newItem.productName,
-        cost_price: newItem.costPrice || 0, // 允许价值为空
+        cost_price: newItem.costPrice || 0,
         quantity: newItem.quantity,
-        supplier: newItem.supplier,         // 发件人
-        recipient: newItem.recipient,       // 收件人
+        supplier: newItem.supplier,
+        recipient: newItem.recipient,
         tracking_number: newItem.trackingNumber,
         status: 'ordered'
       }]);
-      
-      // 更新最新价格
       if (finalProductId && newItem.costPrice) {
         await supabase.from('products').update({ last_price: newItem.costPrice }).eq('id', finalProductId);
       }
@@ -210,7 +202,6 @@ export default function ParcelTracker() {
     setView('dashboard');
   };
 
-  // --- 统计 ---
   const chartData = useMemo(() => {
     if (!selectedStatId) return [];
     const history = items
@@ -231,7 +222,6 @@ export default function ParcelTracker() {
     }).sort((a, b) => b.totalQty - a.totalQty);
   }, [products, items]);
 
-  // --- 交互 ---
   const handleLogin = (e) => {
     e.preventDefault();
     if (!loginInput.trim()) return;
@@ -266,7 +256,6 @@ export default function ParcelTracker() {
            item.recipient?.toLowerCase().includes(term);
   });
 
-  // Login View
   if (!isLoggedIn) return (
     <div className="min-h-screen bg-blue-50 flex items-center justify-center px-4">
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm">
@@ -283,12 +272,10 @@ export default function ParcelTracker() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24 font-sans text-gray-800">
-      {/* 顶部 Header */}
       <header className="bg-white shadow-sm sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-3 flex justify-between items-center">
           <h1 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-            <Truck className="w-6 h-6 text-blue-600" /> 
-            快递助手
+            <Truck className="w-6 h-6 text-blue-600" /> 快递助手
           </h1>
           <div className="flex items-center gap-2 text-xs">
             <span className="bg-gray-100 px-2 py-1 rounded text-gray-500 font-mono">{householdId}</span>
@@ -298,15 +285,11 @@ export default function ParcelTracker() {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-4 space-y-6">
-        
-        {/* 统计图表 (隐藏在二级菜单) */}
         {view === 'stats' && (
           <div className="space-y-4">
             {selectedStatId ? (
               <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 animate-in slide-in-from-right duration-200">
-                <button onClick={() => setSelectedStatId(null)} className="flex items-center text-blue-600 font-bold mb-4">
-                  <ChevronLeft className="w-5 h-5" /> 返回
-                </button>
+                <button onClick={() => setSelectedStatId(null)} className="flex items-center text-blue-600 font-bold mb-4"><ChevronLeft className="w-5 h-5" /> 返回</button>
                 <h3 className="text-lg font-bold text-gray-700 mb-2 pl-2 border-l-4 border-blue-500">价值波动</h3>
                 <div className="h-64 w-full bg-gray-50 rounded-xl p-2">
                   <ResponsiveContainer width="100%" height="100%">
@@ -342,26 +325,17 @@ export default function ParcelTracker() {
           </div>
         )}
 
-        {/* 录入表单 (重构：侧重快递信息) */}
         {view === 'add' && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-extrabold text-gray-800">录入新包裹</h2><button onClick={() => setView('dashboard')} className="p-2 bg-gray-50 rounded-full text-gray-400"><X className="w-5 h-5" /></button></div>
-            
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">快递单号</label>
-                <input type="text" className="w-full p-4 bg-gray-50 rounded-xl border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none font-mono text-lg" 
-                  placeholder="扫描或粘贴单号" value={newItem.trackingNumber} onChange={e => setNewItem({...newItem, trackingNumber: e.target.value})} />
+                <input type="text" className="w-full p-4 bg-gray-50 rounded-xl border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none font-mono text-lg" placeholder="扫描或粘贴单号" value={newItem.trackingNumber} onChange={e => setNewItem({...newItem, trackingNumber: e.target.value})} />
               </div>
-
               <div className="relative">
                 <label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">物品名称 *</label>
-                <input required type="text" className="w-full p-4 bg-gray-50 rounded-xl border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none" 
-                  placeholder="例如：衣服、文件..." value={newItem.productName} 
-                  onChange={e => handleNameChange(e.target.value)}
-                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} 
-                />
-                {/* 联想列表 */}
+                <input required type="text" className="w-full p-4 bg-gray-50 rounded-xl border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none" placeholder="例如：衣服、文件..." value={newItem.productName} onChange={e => handleNameChange(e.target.value)} onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} />
                 {showSuggestions && suggestions.length > 0 && (
                   <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
                     {suggestions.map(s => (
@@ -373,23 +347,19 @@ export default function ParcelTracker() {
                   </div>
                 )}
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div><label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">收件人</label><input type="text" className="w-full p-3 bg-gray-50 rounded-xl border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={newItem.recipient} onChange={e => setNewItem({...newItem, recipient: e.target.value})} /></div>
                 <div><label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">发件人</label><input type="text" className="w-full p-3 bg-gray-50 rounded-xl border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={newItem.supplier} onChange={e => setNewItem({...newItem, supplier: e.target.value})} /></div>
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div><label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">物品价值 (元)</label><input type="number" className="w-full p-3 bg-gray-50 rounded-xl border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none" placeholder="用于统计" value={newItem.costPrice} onChange={e => setNewItem({...newItem, costPrice: e.target.value})} /></div>
                 <div><label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">数量</label><input type="number" className="w-full p-3 bg-gray-50 rounded-xl border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={newItem.quantity} onChange={e => setNewItem({...newItem, quantity: e.target.value})} /></div>
               </div>
-
               <button type="submit" className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-200 mt-4">确认录入</button>
             </form>
           </div>
         )}
 
-        {/* 首页概览 */}
         {(view === 'dashboard' || view === 'list') && (
           <>
              {view === 'dashboard' && (
@@ -452,10 +422,8 @@ export default function ParcelTracker() {
              </div>
           </>
         )}
-
       </main>
 
-      {/* 底部导航 */}
       <nav className="fixed bottom-0 w-full bg-white/90 backdrop-blur-md border-t border-gray-200 pb-safe z-20">
         <div className="max-w-2xl mx-auto flex justify-around items-center h-16">
           <button onClick={() => setView('dashboard')} className={`flex flex-col items-center space-y-1 w-16 transition-colors ${view === 'dashboard' ? 'text-blue-600' : 'text-gray-400'}`}><Package className="w-6 h-6" /><span className="text-[10px] font-medium">包裹</span></button>
