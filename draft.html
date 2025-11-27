@@ -4,12 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>快递单号扫描</title>
-    <!-- 引入 Tailwind CSS -->
+    
+    <!-- 1. Tailwind CSS (保留官方源，如有条件建议本地化) -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 引入 React 和 Babel -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- 2. React & Babel (已替换为国内 Staticfile 镜像，解决加载慢/白屏问题) -->
+    <script src="https://cdn.staticfile.net/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdn.staticfile.net/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdn.staticfile.net/babel-standalone/7.23.5/babel.min.js"></script>
     
     <style>
         body { 
@@ -61,7 +63,6 @@
             CheckCircle: ({size=20}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>,
             Search: ({size=20}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
             BarChart: ({size=20}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
-            // 修复后的标准齿轮图标
             Settings: ({size=20}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>,
             X: ({size=20}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
             Download: ({size=20}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
@@ -71,7 +72,8 @@
             ChevronLeft: ({size=24}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>,
             ChevronRight: ({size=24}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>,
             Filter: ({size=18}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>,
-            Today: ({size=16}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line><path d="M12 14h.01"/></svg>
+            Today: ({size=16}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line><path d="M12 14h.01"/></svg>,
+            Maximize: ({size=20}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
         };
 
         const BatchScannerStats = () => {
@@ -113,6 +115,10 @@
             const [manualInputCode, setManualInputCode] = useState('');
             const [showSuggestions, setShowSuggestions] = useState(false);
             const [currentEditingIndex, setCurrentEditingIndex] = useState(null);
+            
+            // 新增：图片暂存与预览状态
+            const [scannedImage, setScannedImage] = useState(null);
+            const [imagePreview, setImagePreview] = useState(false);
 
             useEffect(() => { localStorage.setItem('stats_packages', JSON.stringify(packages)); }, [packages]);
             useEffect(() => { localStorage.setItem('stats_goods_list', JSON.stringify(goodsList)); }, [goodsList]);
@@ -151,7 +157,6 @@
                     const dayStart = new Date(year, month, d).getTime();
                     const dayEnd = new Date(year, month, d, 23, 59, 59).getTime();
                     const dayPackages = filteredData.filter(p => p.timestamp >= dayStart && p.timestamp <= dayEnd);
-                    // 兼容性处理：p.quantity || 1
                     const totalQuantity = dayPackages.reduce((sum, p) => sum + (Number(p.quantity) || 1), 0);
                     calendarDays.push({ day: d, date: new Date(year, month, d), count: totalQuantity, packages: dayPackages, hasData: totalQuantity > 0 });
                 }
@@ -203,6 +208,12 @@
             const handleImageUpload = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
+                
+                // 1. 读取图片用于预览
+                const reader = new FileReader();
+                reader.onload = (ev) => setScannedImage(ev.target.result);
+                reader.readAsDataURL(file);
+
                 setAnalyzing(true);
                 try {
                     const imgBitmap = await createImageBitmap(file);
@@ -222,9 +233,8 @@
                                 const existingCodes = new Set(batchItems.map(i => i.tracking));
                                 const uniqueNewItems = newItems.filter(i => !existingCodes.has(i.tracking));
                                 setBatchItems([...batchItems, ...uniqueNewItems]);
-                            } else { alert("未识别到清晰条码"); }
+                            } else { alert("未识别到清晰条码，请参考左侧图片手动输入"); }
                         } catch (e) {
-                            // 即使 flag 开启，file:// 协议也可能导致 BarcodeDetector 构造失败
                             alert("扫码组件启动失败。\n\n请检查：\n1. 确保使用 HTTPS 或 localhost (禁止直接打开 html 文件)\n2. 电脑端 chrome://flags 是否开启特性");
                         }
                     } else { 
@@ -267,7 +277,15 @@
                     sender: globalFill.sender||'未知', phone: globalFill.phone||'未知', verified: false, timestamp: Date.now()
                 }));
                 setPackages([...newPackages, ...packages]);
+                // 清理工作
                 setIsBatchModalOpen(false);
+                setBatchItems([]);
+                setScannedImage(null); // 清除图片
+            };
+
+            const closeBatchModal = () => {
+                setIsBatchModalOpen(false);
+                setScannedImage(null);
                 setBatchItems([]);
             };
 
@@ -563,11 +581,26 @@
                         </div>
                     )}
 
+                    {/* 大图预览模态框 */}
+                    {imagePreview && scannedImage && (
+                        <div className="fixed inset-0 z-[60] bg-black/95 flex flex-col justify-center items-center animate-fade-in" onClick={()=>setImagePreview(false)}>
+                            <img 
+                                src={scannedImage} 
+                                className="max-w-full max-h-[85vh] object-contain transition-transform" 
+                                onClick={(e)=>e.stopPropagation()} // 防止点击图片关闭，支持手势缩放
+                            />
+                            <button className="absolute top-8 right-6 text-white bg-white/20 p-2 rounded-full backdrop-blur-md" onClick={()=>setImagePreview(false)}>
+                                <Icons.X size={24} />
+                            </button>
+                            <div className="absolute bottom-10 text-white/70 text-sm bg-black/40 px-4 py-2 rounded-full backdrop-blur-sm">点击任意空白处关闭</div>
+                        </div>
+                    )}
+
                     {/* 批量录入模态框 */}
                     {isBatchModalOpen && (
                         <div className="fixed inset-0 z-50 bg-white flex flex-col animate-slide-up">
                             <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-20">
-                                <button onClick={()=>setIsBatchModalOpen(false)} className="text-gray-500 font-medium">取消</button>
+                                <button onClick={closeBatchModal} className="text-gray-500 font-medium">取消</button>
                                 <h2 className="font-bold text-lg">批量录入</h2>
                                 <button onClick={saveBatch} className="text-blue-600 font-bold">完成</button>
                             </div>
@@ -593,10 +626,42 @@
                                 <div className="text-xs font-bold text-gray-400 uppercase mb-2 pl-2">第2步：扫码并确认</div>
                                 <div className="space-y-3">
                                     <div className="grid grid-cols-2 gap-3">
-                                        <label className="bg-white border-2 border-dashed border-gray-300 rounded-xl h-24 flex flex-col items-center justify-center text-gray-400 active:bg-gray-50 active:border-blue-400 transition-colors relative">
-                                            <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={analyzing} />
-                                            {analyzing ? <span className="text-xs font-bold animate-pulse text-blue-500">识别中...</span> : <><Icons.Camera size={24} /><span className="text-xs font-bold mt-1">拍照扫条码</span></>}
-                                        </label>
+                                        
+                                        {/* 图片上传区域 (带预览功能) */}
+                                        {scannedImage ? (
+                                            <div className="relative h-24 bg-gray-100 rounded-xl overflow-hidden border border-blue-200 group">
+                                                {/* 点击图片全屏预览 */}
+                                                <img 
+                                                    src={scannedImage} 
+                                                    onClick={()=>setImagePreview(true)} 
+                                                    className="w-full h-full object-cover cursor-zoom-in" 
+                                                />
+                                                {/* 右下角：重传按钮 */}
+                                                <div className="absolute bottom-0 right-0 p-1 bg-white/90 rounded-tl-lg" onClick={(e)=>e.stopPropagation()}>
+                                                   <label className="flex items-center justify-center w-8 h-8 bg-blue-50 text-blue-600 rounded-lg cursor-pointer active:scale-90 transition-transform hover:bg-blue-100">
+                                                       <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={analyzing} />
+                                                       <Icons.Camera size={18} />
+                                                   </label>
+                                                </div>
+                                                {/* 右上角：清除按钮 */}
+                                                <button 
+                                                    onClick={(e)=>{e.stopPropagation(); setScannedImage(null);}} 
+                                                    className="absolute top-0 right-0 p-1.5 bg-red-500/80 text-white rounded-bl-lg hover:bg-red-600 transition-colors"
+                                                >
+                                                    <Icons.X size={14} />
+                                                </button>
+                                                {/* 提示遮罩 */}
+                                                <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity">
+                                                    <span className="bg-black/60 text-white text-[10px] px-2 py-1 rounded-full backdrop-blur-sm"><Icons.Maximize size={12} /> 查看大图</span>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <label className="bg-white border-2 border-dashed border-gray-300 rounded-xl h-24 flex flex-col items-center justify-center text-gray-400 active:bg-gray-50 active:border-blue-400 transition-colors relative cursor-pointer">
+                                                <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={analyzing} />
+                                                {analyzing ? <span className="text-xs font-bold animate-pulse text-blue-500">识别中...</span> : <><Icons.Camera size={24} /><span className="text-xs font-bold mt-1">拍照扫条码</span></>}
+                                            </label>
+                                        )}
+
                                         <div className="bg-white border border-gray-200 rounded-xl p-3 flex flex-col justify-between">
                                             <input type="text" placeholder="手动输入单号" className="w-full text-xs border-b border-gray-100 py-1 outline-none font-mono" value={manualInputCode} onChange={e=>setManualInputCode(e.target.value)} />
                                             <button onClick={addManualCode} className="w-full bg-gray-800 text-white text-xs font-bold py-1.5 rounded-lg mt-2">添加</button>
@@ -618,7 +683,7 @@
                                             </div>
                                         </div>
                                     ))}
-                                    {batchItems.length === 0 && <div className="text-center py-4 text-xs text-gray-400">暂无数据</div>}
+                                    {batchItems.length === 0 && <div className="text-center py-4 text-xs text-gray-400">暂无单号</div>}
                                 </div>
                             </div>
                             <div className="p-4 bg-white border-t border-gray-100 safe-area-bottom pb-safe-bottom">
