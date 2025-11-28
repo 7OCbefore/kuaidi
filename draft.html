@@ -8,7 +8,7 @@
     <!-- 1. Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- 2. React & Babel: 换回 unpkg 源 (如仍慢，建议下载到本地) -->
+    <!-- 2. React & Babel -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -102,8 +102,6 @@
             const [currentDate, setCurrentDate] = useState(new Date()); 
             const [selectedGood, setSelectedGood] = useState(null); 
             const [selectedDayDetail, setSelectedDayDetail] = useState(null);
-            
-            // 新增：货物筛选栏展开状态
             const [isGoodsExpanded, setIsGoodsExpanded] = useState(false);
 
             const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
@@ -144,28 +142,53 @@
                 }
             };
 
-            // --- 统计数据计算 (增强版：今日/本月/本年 聚合) ---
+            // --- 核心：状态更新逻辑优化 (记录核验时间) ---
+            const toggleVerify = (id) => {
+                setPackages(prev => prev.map(p => {
+                    if (p.id === id) {
+                        const isVerifying = !p.verified;
+                        return {
+                            ...p,
+                            verified: isVerifying,
+                            verifiedTime: isVerifying ? Date.now() : undefined // 记录/清除 核验时间
+                        };
+                    }
+                    return p;
+                }));
+            };
+
+            // --- 统计数据计算 (逻辑重构：分离添加与实收) ---
             const statsData = useMemo(() => {
-                // 1. 筛选数据 (如果选了货物，只看该货物；没选则看全部)
+                // 1. 货物筛选
                 let filteredData = packages;
                 if (selectedGood) filteredData = packages.filter(p => p.content.includes(selectedGood));
 
-                // 2. 计算核心指标 (今日、本月、本年)
+                // 2. 计算核心指标
                 const now = new Date();
-                // 今日范围
                 const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
                 const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).getTime();
-                // 本月范围
+                
                 const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
                 const thisMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).getTime();
-                // 本年范围
+                
                 const thisYearStart = new Date(now.getFullYear(), 0, 1).getTime();
                 const thisYearEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59).getTime();
 
+                // 辅助：获取有效的核验时间 (兼容旧数据：如果verified=true但没verifiedTime，暂用timestamp替代，确保老数据不丢失)
+                const getVerifyTime = (p) => p.verifiedTime || p.timestamp;
+
                 const summary = {
-                    today: filteredData.filter(p => p.timestamp >= todayStart && p.timestamp <= todayEnd).reduce((sum, p) => sum + (Number(p.quantity)||1), 0),
-                    month: filteredData.filter(p => p.timestamp >= thisMonthStart && p.timestamp <= thisMonthEnd).reduce((sum, p) => sum + (Number(p.quantity)||1), 0),
-                    year: filteredData.filter(p => p.timestamp >= thisYearStart && p.timestamp <= thisYearEnd).reduce((sum, p) => sum + (Number(p.quantity)||1), 0),
+                    // 今日添加：仅基于 timestamp (录入时间)
+                    todayAdded: filteredData.filter(p => p.timestamp >= todayStart && p.timestamp <= todayEnd).reduce((sum, p) => sum + (Number(p.quantity)||1), 0),
+                    
+                    // 今日实收：基于 verifiedTime (核验时间)
+                    todayReceived: filteredData.filter(p => p.verified && getVerifyTime(p) >= todayStart && getVerifyTime(p) <= todayEnd).reduce((sum, p) => sum + (Number(p.quantity)||1), 0),
+                    
+                    // 本月实收
+                    monthReceived: filteredData.filter(p => p.verified && getVerifyTime(p) >= thisMonthStart && getVerifyTime(p) <= thisMonthEnd).reduce((sum, p) => sum + (Number(p.quantity)||1), 0),
+                    
+                    // 本年实收
+                    yearReceived: filteredData.filter(p => p.verified && getVerifyTime(p) >= thisYearStart && getVerifyTime(p) <= thisYearEnd).reduce((sum, p) => sum + (Number(p.quantity)||1), 0),
                 };
 
                 // 3. 准备日历/图表数据 (基于 currentDate 导航)
@@ -176,22 +199,28 @@
                 const firstDayObj = new Date(year, month, 1);
                 const startWeekDay = firstDayObj.getDay();
                 
+                // 构建日历数据 (日历视图展示的是“实收”情况，所以用 verifiedTime)
+                // 用户需求是“看到各个货物单独的每日的总出库(收到)数量”，所以日历应反映“收到”的时间
                 const calendarDays = [];
                 for (let i = 0; i < startWeekDay; i++) calendarDays.push({ empty: true });
                 for (let d = 1; d <= daysInMonth; d++) {
                     const dayStart = new Date(year, month, d).getTime();
                     const dayEnd = new Date(year, month, d, 23, 59, 59).getTime();
-                    const dayPackages = filteredData.filter(p => p.timestamp >= dayStart && p.timestamp <= dayEnd);
+                    
+                    // 筛选当日“收到”的包裹
+                    const dayPackages = filteredData.filter(p => p.verified && getVerifyTime(p) >= dayStart && getVerifyTime(p) <= dayEnd);
                     const totalQuantity = dayPackages.reduce((sum, p) => sum + (Number(p.quantity) || 1), 0);
+                    
                     calendarDays.push({ day: d, date: new Date(year, month, d), count: totalQuantity, packages: dayPackages, hasData: totalQuantity > 0 });
                 }
 
+                // 构建年度数据
                 const yearMonths = [];
-                let viewYearTotal = 0; // 导航年份的总计
+                let viewYearTotal = 0; 
                 for (let m = 0; m < 12; m++) {
                     const mStart = new Date(year, m, 1).getTime();
                     const mEnd = new Date(year, m + 1, 0, 23, 59, 59).getTime();
-                    const mPackages = filteredData.filter(p => p.timestamp >= mStart && p.timestamp <= mEnd);
+                    const mPackages = filteredData.filter(p => p.verified && getVerifyTime(p) >= mStart && getVerifyTime(p) <= mEnd);
                     const mTotal = mPackages.reduce((sum, p) => sum + (Number(p.quantity) || 1), 0);
                     yearMonths.push({ month: m + 1, value: mTotal });
                     viewYearTotal += mTotal;
@@ -200,7 +229,7 @@
                 return { calendarDays, yearMonths, viewYearTotal, summary };
             }, [packages, currentDate, selectedGood]);
 
-            // ... 其他辅助函数保持不变 ...
+            // ... 其他辅助函数 ...
             const navigateDate = (direction) => {
                 const newDate = new Date(currentDate);
                 if (statsMode === 'month') newDate.setMonth(newDate.getMonth() + direction);
@@ -219,17 +248,22 @@
                 return `${currentDate.getFullYear()}年`;
             }, [currentDate, statsMode]);
 
+            // 详情列表使用已经计算好的 calendarDays 中的 packages，不需要重复计算，简化逻辑
             const selectedDayPackages = useMemo(() => {
                 if (!selectedDayDetail || statsMode !== 'month') return [];
+                // 从 calendarDays 中找到对应日期的数据 (这需要 calendarDays 在 useMemo 外部或重新查找)
+                // 为简单起见，这里重新过滤一次，逻辑与 statsData 中一致
                 const d = new Date(selectedDayDetail);
                 const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
                 const dayEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59).getTime();
-                let data = packages.filter(p => p.timestamp >= dayStart && p.timestamp <= dayEnd);
+                const getVerifyTime = (p) => p.verifiedTime || p.timestamp;
+                
+                let data = packages.filter(p => p.verified && getVerifyTime(p) >= dayStart && getVerifyTime(p) <= dayEnd);
                 if (selectedGood) data = data.filter(p => p.content.includes(selectedGood));
                 return data;
             }, [selectedDayDetail, packages, selectedGood, statsMode]);
 
-            // ... 核心功能函数 (扫码、备份等) ...
+            // ... 核心功能函数 ...
             const handleImageUpload = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -273,7 +307,7 @@
                 setIsBatchModalOpen(false); setBatchItems([]); setScannedImage(null);
             };
             const closeBatchModal = () => { setIsBatchModalOpen(false); setScannedImage(null); setBatchItems([]); };
-            const toggleVerify = (id) => setPackages(prev => prev.map(p => p.id === id ? { ...p, verified: !p.verified } : p));
+            
             const confirmDelete = () => { setPackages(prev => prev.filter(p => p.id !== deleteTargetId)); setDeleteTargetId(null); };
             const exportBackup = () => {
                 try { const blob = new Blob([JSON.stringify({version:'2.0', packages, goodsList}, null, 2)], {type: 'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Backup_${new Date().toISOString().slice(0,10)}.json`; document.body.appendChild(a); a.click(); document.body.removeChild(a); } catch(e) { alert("备份失败"); }
@@ -348,7 +382,7 @@
                             {filteredPackages.length===0 && <div className="text-center py-10 text-gray-400 text-sm">暂无数据</div>}
                         </div>
                     ) : (
-                        // --- 统计看板 (升级版：核心数据概览 + 可展开货物选择) ---
+                        // --- 统计看板 ---
                         <div className="px-4 pt-4 space-y-4 animate-fade-in pb-20">
                             
                             {/* 1. 货物筛选栏 (可展开) */}
@@ -406,19 +440,20 @@
                                 )}
                             </div>
 
-                            {/* 2. 核心数据概览卡片 (文案已修正为“收到”) */}
+                            {/* 2. 核心数据概览 (基于 VerifiedTime 的实收统计) */}
                             <div className="grid grid-cols-3 gap-3">
                                 <div className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 text-center">
-                                    <div className="text-xs text-gray-400 mb-1">今日收到</div>
-                                    <div className="text-xl font-bold text-blue-600">{statsData.summary.today}</div>
+                                    <div className="text-xs text-gray-400 mb-1">今日添加</div>
+                                    <div className="text-xl font-bold text-gray-700">{statsData.summary.todayAdded}</div>
+                                </div>
+                                <div className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 text-center relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 w-4 h-4 bg-blue-500 rounded-bl-lg"></div>
+                                    <div className="text-xs text-gray-400 mb-1">今日实收</div>
+                                    <div className="text-xl font-bold text-blue-600">{statsData.summary.todayReceived}</div>
                                 </div>
                                 <div className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 text-center">
-                                    <div className="text-xs text-gray-400 mb-1">本月收到</div>
-                                    <div className="text-xl font-bold text-slate-800">{statsData.summary.month}</div>
-                                </div>
-                                <div className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 text-center">
-                                    <div className="text-xs text-gray-400 mb-1">本年收到</div>
-                                    <div className="text-xl font-bold text-slate-800">{statsData.summary.year}</div>
+                                    <div className="text-xs text-gray-400 mb-1">本月实收</div>
+                                    <div className="text-xl font-bold text-slate-800">{statsData.summary.monthReceived}</div>
                                 </div>
                             </div>
 
@@ -438,7 +473,7 @@
                                 <button onClick={() => navigateDate(1)} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg"><Icons.ChevronRight size={20} /></button>
                             </div>
 
-                            {/* 4. 主视图区域 */}
+                            {/* 4. 主视图区域 (显示的是实收数据) */}
                             {statsMode === 'month' ? (
                                 <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
                                     <div className="grid grid-cols-7 mb-2 text-center text-xs text-gray-400 font-medium"><div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div></div>
@@ -468,16 +503,16 @@
                                         })}
                                     </div>
                                     <div className="text-center text-sm font-bold text-gray-600 mt-4 border-t pt-2 border-gray-50">
-                                        {currentDate.getFullYear()}年 总计: <span className="text-blue-600 text-lg">{statsData.viewYearTotal}</span>
+                                        {currentDate.getFullYear()}年 实收总计: <span className="text-blue-600 text-lg">{statsData.viewYearTotal}</span>
                                     </div>
                                 </div>
                             )}
 
-                            {/* 5. 每日详情列表 */}
+                            {/* 5. 每日详情列表 (显示实收包裹) */}
                             {selectedDayPackages.length > 0 && (
                                 <div className="animate-slide-up">
                                     <div className="text-xs font-bold text-gray-400 uppercase mb-2 pl-1">
-                                        {new Date(selectedDayDetail).getMonth()+1}月{new Date(selectedDayDetail).getDate()}日 入库清单
+                                        {new Date(selectedDayDetail).getMonth()+1}月{new Date(selectedDayDetail).getDate()}日 实收清单
                                     </div>
                                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 divide-y divide-gray-50 overflow-hidden">
                                         {selectedDayPackages.map(pkg => (
@@ -486,7 +521,7 @@
                                                     <div className="font-bold text-slate-700">{pkg.content} <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded ml-1">x{pkg.quantity || 1}</span></div>
                                                     <div className="text-xs text-gray-400 font-mono mt-0.5">{pkg.tracking}</div>
                                                 </div>
-                                                {pkg.verified ? <Icons.CheckCircle className="text-green-500" size={16}/> : <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded">待收</span>}
+                                                <Icons.CheckCircle className="text-green-500" size={16}/>
                                             </div>
                                         ))}
                                     </div>
