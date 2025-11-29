@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>快递核验 Ultra</title>
+    <title>快递核验</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -16,34 +16,46 @@
             font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
             -webkit-tap-highlight-color: transparent;
             background-color: #F2F2F7;
-            color: #1C1C1E;
+            color: #000;
+            -webkit-font-smoothing: antialiased;
         }
         
         /* 动画与特效 */
-        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
-        .animate-slide-up { animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        .animate-pop { animation: pop 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        .animate-fade-in { animation: fadeIn 0.3s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
+        .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.19, 1, 0.22, 1) forwards; }
+        .animate-pop { animation: pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
         .scan-line { animation: scanMove 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
 
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        @keyframes pop { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        @keyframes pop { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
         @keyframes scanMove { 0%, 100% { top: 0%; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 50% { top: 100%; } }
 
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .pt-safe-top { padding-top: env(safe-area-inset-top); }
         .pb-safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
         
-        .ios-input { transition: all 0.2s ease; }
-        .ios-input:focus { background-color: #FFFFFF; box-shadow: 0 0 0 2px rgba(59,130,246,0.3); transform: translateY(-1px); }
+        /* iOS 风格输入框 */
+        .ios-input { transition: all 0.2s ease; background-color: rgba(118, 118, 128, 0.12); border: none; color: #000; }
+        .ios-input:focus { background-color: #FFFFFF; box-shadow: 0 0 0 2px rgba(0,122,255,0.3); transform: translateY(-1px); }
+        .ios-input::placeholder { color: #8E8E93; }
 
+        /* 毛玻璃效果 */
+        .ios-blur { background-color: rgba(255,255,255,0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-bottom: 0.5px solid rgba(0,0,0,0.1); }
+        .modal-blur { background-color: rgba(255,255,255,0.95); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px); }
+
+        /* 日历样式 */
         .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
-        .calendar-day { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 50%; position: relative; font-size: 15px; font-weight: 500; color: #333; transition: background-color 0.2s; }
-        .calendar-day.active { background-color: white; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-        .calendar-day.selected { background-color: #EFF6FF; border: 2px solid #3B82F6; color: #1D4ED8; }
-        .calendar-day.today-highlight { background-color: #007AFF; color: white !important; font-weight: 700; box-shadow: 0 4px 6px rgba(0,122,255,0.3); }
+        .calendar-day { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 10px; position: relative; font-size: 15px; font-weight: 500; color: #333; transition: background-color 0.2s; }
+        .calendar-day.active { background-color: white; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .calendar-day.selected { background-color: #E5F1FF; border: 1.5px solid #007AFF; color: #007AFF; }
+        /* 修改：今日圆角方形 */
+        .calendar-day.today-highlight { background-color: #007AFF; color: white !important; font-weight: 700; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,122,255,0.3); }
         .calendar-dot { width: 4px; height: 4px; border-radius: 50%; background-color: #007AFF; position: absolute; bottom: 6px; }
         .today-highlight .calendar-dot { background-color: white; }
+
+        /* 按钮点击效果 */
+        .active-scale:active { transform: scale(0.96); transition: transform 0.1s; }
     </style>
 </head>
 <body>
@@ -53,26 +65,28 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // --- Icons (修复：添加 ...props 以支持 className 传参) ---
+        // --- 图标组件 (保持 SVG 路径不变，但在 UI 中应用新风格) ---
         const Icons = {
-            Camera: ({size=24, ...props}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>,
-            Plus: ({size=24, ...props}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
-            Scan: ({size=24, ...props}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><rect x="7" y="7" width="10" height="10" rx="1"></rect></svg>,
-            Trash2: ({size=20, ...props}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>,
-            CheckCircle: ({size=20, ...props}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>,
-            Search: ({size=20, ...props}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
-            BarChart: ({size=20, ...props}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
-            Settings: ({size=20, ...props}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>,
-            X: ({size=20, ...props}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
-            ChevronLeft: ({size=24, ...props}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polyline points="15 18 9 12 15 6"></polyline></svg>,
-            ChevronRight: ({size=24, ...props}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polyline points="9 18 15 12 9 6"></polyline></svg>,
-            Alert: ({size=20, ...props}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>,
-            Note: ({size=20, ...props}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>,
-            Download: ({size=20, ...props}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
-            Upload: ({size=20, ...props}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Camera: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>,
+            Plus: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+            Scan: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><rect x="7" y="7" width="10" height="10" rx="1"></rect></svg>,
+            Trash2: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>,
+            CheckCircle: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>,
+            Search: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+            BarChart: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+            Settings: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>,
+            X: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+            ChevronLeft: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><polyline points="15 18 9 12 15 6"></polyline></svg>,
+            ChevronRight: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><polyline points="9 18 15 12 9 6"></polyline></svg>,
+            Alert: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>,
+            Note: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>,
+            Download: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+            Upload: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
+            Package: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
         };
 
         const App = () => {
+            // --- 核心状态 ---
             const [packages, setPackages] = useState(() => { try { return JSON.parse(localStorage.getItem('stats_packages')) || []; } catch { return []; } });
             const [goodsList, setGoodsList] = useState(() => { try { return JSON.parse(localStorage.getItem('stats_goods_list')) || []; } catch { return []; } });
 
@@ -90,34 +104,73 @@
             const [analyzing, setAnalyzing] = useState(false);
             const [deleteTargetId, setDeleteTargetId] = useState(null);
 
+            // 批量录入
             const [batchItems, setBatchItems] = useState([]); 
             const [globalFill, setGlobalFill] = useState({ content: '', quantity: 1, note: '' });
             const [manualInputCode, setManualInputCode] = useState('');
             const [showSuggestions, setShowSuggestions] = useState(false);
             const [currentEditingIndex, setCurrentEditingIndex] = useState(null);
             
+            // 扫码与摄像头
             const videoRef = useRef(null);
             const streamRef = useRef(null);
             const [scanError, setScanError] = useState(null);
-            const [lastScannedCode, setLastScannedCode] = useState(null);
-            const [lastScanTime, setLastScanTime] = useState(0);
             const [verifyLogs, setVerifyLogs] = useState([]);
             const [verifyStatus, setVerifyStatus] = useState('idle');
             const [scanResultDetail, setScanResultDetail] = useState(null); 
             const [scannedImage, setScannedImage] = useState(null);
             const fileInputRef = useRef(null);
+            const lastScannedCodeRef = useRef(null);
+            const lastScanTimeRef = useRef(0);
+
+            // --- 新增：Toast 和 Dialog 状态 ---
+            const [toast, setToast] = useState(null);
+            const [dialog, setDialog] = useState(null); // { title, content, onConfirm, confirmText, type }
 
             useEffect(() => { localStorage.setItem('stats_packages', JSON.stringify(packages)); }, [packages]);
             useEffect(() => { localStorage.setItem('stats_goods_list', JSON.stringify(goodsList)); }, [goodsList]);
             useEffect(() => { if (isVerifyModalOpen) startCamera(); else stopCamera(); return () => stopCamera(); }, [isVerifyModalOpen]);
 
+            // --- UI 辅助函数 (App 级弹窗) ---
+            const showToast = (msg, type = 'success') => {
+                setToast({ msg, type });
+                setTimeout(() => setToast(null), 2500);
+            };
+
+            const confirmAction = (title, content, onConfirm, type = 'danger') => {
+                setDialog({ title, content, onConfirm, type, confirmText: type === 'danger' ? '删除' : '确定' });
+            };
+
+            const closeDialog = () => setDialog(null);
+
+            // --- 校验逻辑 ---
+            const sanitizeTracking = (code) => code.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            const limitQuantity = (value) => {
+                if (value === '') return '';
+                const cleanVal = value.replace(/\D/g, '');
+                if (cleanVal === '') return '';
+                let num = parseInt(cleanVal, 10);
+                if (isNaN(num)) return '';
+                if (num > 666) return 666;
+                if (num < 1) return 1; 
+                return num;
+            };
+
+            // --- 摄像头逻辑 ---
             const startCamera = async () => {
-                setScanError(null); setVerifyStatus('idle'); setScanResultDetail(null); setLastScannedCode(null); setLastScanTime(0); setVerifyLogs([]);
+                setScanError(null); setVerifyStatus('idle'); setScanResultDetail(null); setVerifyLogs([]);
+                lastScannedCodeRef.current = null; lastScanTimeRef.current = 0;
                 if (!navigator.mediaDevices?.getUserMedia) { setScanError("浏览器不支持摄像头"); return; }
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } });
                     streamRef.current = stream;
-                    if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.onloadedmetadata = () => { videoRef.current.play(); requestAnimationFrame(scanFrame); }; }
+                    if (videoRef.current) { 
+                        videoRef.current.srcObject = stream; 
+                        videoRef.current.onloadedmetadata = () => { 
+                            videoRef.current.play(); 
+                            requestAnimationFrame(scanFrame); 
+                        }; 
+                    }
                 } catch (err) { setScanError("无法访问摄像头: " + err.message); }
             };
             const stopCamera = () => { if (streamRef.current) { streamRef.current.getTracks().forEach(track => track.stop()); streamRef.current = null; } };
@@ -131,19 +184,20 @@
                     if (codes.length > 0) {
                         const rawValue = codes[0].rawValue;
                         const now = Date.now();
-                        if (rawValue === lastScannedCode && now - lastScanTime < 3000) { requestAnimationFrame(scanFrame); return; }
-                        if (now - lastScanTime < 1000) { requestAnimationFrame(scanFrame); return; }
+                        if (rawValue === lastScannedCodeRef.current && now - lastScanTimeRef.current < 3000) { requestAnimationFrame(scanFrame); return; }
+                        if (now - lastScanTimeRef.current < 1000) { requestAnimationFrame(scanFrame); return; }
+                        lastScannedCodeRef.current = rawValue;
+                        lastScanTimeRef.current = now;
                         handleVerifyLogic(rawValue);
-                        setLastScanTime(now);
                     }
                 } catch (e) {}
                 requestAnimationFrame(scanFrame);
             };
 
             const handleVerifyLogic = (code) => {
-                setLastScannedCode(code);
-                let targetIndex = packages.findIndex(p => p.tracking === code);
-                if (targetIndex === -1) targetIndex = packages.findIndex(p => p.tracking.length >= 4 && code.endsWith(p.tracking));
+                const cleanCode = sanitizeTracking(code);
+                let targetIndex = packages.findIndex(p => p.tracking === cleanCode);
+                if (targetIndex === -1) targetIndex = packages.findIndex(p => p.tracking.length >= 4 && cleanCode.endsWith(p.tracking));
                 
                 if (targetIndex !== -1) {
                     const target = packages[targetIndex];
@@ -151,28 +205,37 @@
                     if (target.verified) {
                         setVerifyStatus('warning');
                         if(navigator.vibrate) navigator.vibrate(200);
+                        showToast("重复扫描：已入库", "warning");
                     } else {
                         const newPackages = [...packages];
                         newPackages[targetIndex] = { ...target, verified: true, verifiedTime: Date.now() };
                         setPackages(newPackages);
                         setVerifyStatus('success');
                         if(navigator.vibrate) navigator.vibrate(100);
+                        showToast(`入库成功：${target.content}`, "success");
                     }
                 } else {
                     setVerifyStatus('error');
-                    setScanResultDetail({ content: '未知包裹', tracking: code, quantity: '?' });
+                    setScanResultDetail({ content: '未知包裹', tracking: cleanCode, quantity: '?' });
                     if(navigator.vibrate) navigator.vibrate([50, 50, 50]);
+                    showToast("未知单号", "error");
                 }
                 setTimeout(() => { if(isVerifyModalOpen) setVerifyStatus('idle'); }, 2500);
             };
 
             const updateGoodsLibrary = (n) => { if(!n)return; const i=n.trim(); if(!i)return; let l=goodsList.filter(g=>g!==i); l.unshift(i); if(l.length>50)l=l.slice(0,50); setGoodsList(l); };
             const toggleVerify = (id) => { setPackages(prev => prev.map(p => { if(p.id===id) return {...p, verified:!p.verified, verifiedTime:!p.verified?Date.now():undefined}; return p; })); };
-            const confirmDelete = () => { setPackages(prev => prev.filter(p => p.id !== deleteTargetId)); setDeleteTargetId(null); };
+            
+            // 删除改为使用 App 弹窗
+            const confirmDelete = () => { 
+                setPackages(prev => prev.filter(p => p.id !== deleteTargetId)); 
+                setDeleteTargetId(null); 
+                showToast("已删除");
+            };
 
+            // 统计数据
             const statsData = useMemo(() => {
                 let filteredData = packages;
-                // 修复核心：p.content 可能是 undefined，添加默认值
                 if (selectedGood) filteredData = packages.filter(p => (p.content || '').includes(selectedGood));
                 
                 const now = new Date();
@@ -218,150 +281,305 @@
                     if ('BarcodeDetector' in window) {
                         const detector = new window.BarcodeDetector({ formats: ['code_128', 'code_39', 'ean_13', 'qr_code'] });
                         const detected = await detector.detect(imgBitmap);
-                        const codes = [...new Set(detected.map(d => d.rawValue))].filter(c => c.length > 5);
+                        const codes = [...new Set(detected.map(d => sanitizeTracking(d.rawValue)))].filter(c => c.length >= 4);
                         if (codes.length > 0) {
                             const newItems = codes.map(code => ({ _tempId: Date.now() + Math.random(), tracking: code, content: globalFill.content, quantity: globalFill.quantity, note: globalFill.note }));
                             const existing = new Set(batchItems.map(i => i.tracking));
                             setBatchItems([...batchItems, ...newItems.filter(i => !existing.has(i.tracking))]);
-                        } else { alert("未识别到清晰条码"); }
-                    } else { alert("浏览器不支持"); }
-                } catch (err) { alert("识别出错"); } finally { setAnalyzing(false); e.target.value = ''; }
+                            showToast(`识别到 ${codes.length} 个条码`);
+                        } else { showToast("未识别到有效条码", "error"); }
+                    } else { showToast("浏览器不支持条码识别", "error"); }
+                } catch (err) { showToast("识别出错", "error"); } finally { setAnalyzing(false); e.target.value = ''; }
             };
-            const addManualCode = () => { if(manualInputCode && !batchItems.some(i=>i.tracking===manualInputCode)) { setBatchItems([...batchItems, {_tempId:Date.now(), tracking:manualInputCode, content:globalFill.content, quantity:globalFill.quantity, note:globalFill.note}]); setManualInputCode(''); } };
-            const applyGlobalToAll = () => { setBatchItems(prev => prev.map(item => ({ ...item, content: globalFill.content || item.content, quantity: globalFill.quantity || item.quantity, note: globalFill.note || item.note }))); };
-            const updateBatchItem = (index, field, value) => { setBatchItems(prevItems => prevItems.map((item, i) => i === index ? { ...item, [field]: value } : item)); };
-            const removeBatchItem = (index) => { setBatchItems(prevItems => prevItems.filter((_, i) => i !== index)); };
-            const saveBatch = () => { if(batchItems.length===0 || batchItems.some(i=>!i.content)) return alert("请检查货物名"); batchItems.forEach(i=>updateGoodsLibrary(i.content)); setPackages([...batchItems.map(item => ({ id: Date.now()+Math.random(), tracking: item.tracking, content: item.content, quantity: Number(item.quantity)||1, note: item.note||'', verified: false, timestamp: Date.now() })), ...packages]); setIsBatchModalOpen(false); setBatchItems([]); setScannedImage(null); };
 
-            const exportBackup = () => { const b=new Blob([JSON.stringify({version:'2.0',packages,goodsList},null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=`ScanKuaid_Backup.json`; document.body.appendChild(a); a.click(); document.body.removeChild(a); };
-            const handleRestore = (e) => { const r=new FileReader(); r.onload=(ev)=>{try{const d=JSON.parse(ev.target.result); if(confirm(`恢复${d.packages?.length}条?`)){if(d.packages)setPackages(d.packages);if(d.goodsList)setGoodsList(d.goodsList); alert("成功"); setIsSettingsOpen(false);}}catch(err){alert("失败");}}; if(e.target.files[0])r.readAsText(e.target.files[0]); };
-            const exportExcel = () => { if(packages.length===0)return alert('无数据'); let c="单号,货物,数量,备注,状态,时间\n"; packages.forEach(p=>{c+=`${p.tracking},${p.content},${p.quantity},${p.note},${p.verified?'已收':'待收'},${new Date(p.timestamp).toLocaleString()}\n`;}); const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(["\ufeff"+c],{type:'text/csv'})); a.download=`List.csv`; document.body.appendChild(a); a.click(); document.body.removeChild(a); };
+            const addManualCode = () => { 
+                const cleanCode = sanitizeTracking(manualInputCode);
+                if(cleanCode.length < 4) return showToast("单号至少4位", "warning");
+                if(cleanCode && !batchItems.some(i=>i.tracking===cleanCode)) { 
+                    setBatchItems([...batchItems, {_tempId:Date.now(), tracking:cleanCode, content:globalFill.content, quantity:globalFill.quantity, note:globalFill.note}]); 
+                    setManualInputCode(''); 
+                } else { showToast("单号已存在", "warning"); }
+            };
+            
+            const applyGlobalToAll = () => { 
+                setBatchItems(prev => prev.map(item => ({ ...item, content: globalFill.content || item.content, quantity: globalFill.quantity || item.quantity, note: globalFill.note || item.note })));
+                showToast("应用成功");
+            };
+            
+            const updateBatchItem = (index, field, value) => { 
+                let finalVal = value;
+                if(field === 'quantity') finalVal = limitQuantity(value);
+                setBatchItems(prevItems => prevItems.map((item, i) => i === index ? { ...item, [field]: finalVal } : item)); 
+            };
+            
+            const removeBatchItem = (index) => { setBatchItems(prevItems => prevItems.filter((_, i) => i !== index)); };
+            
+            const saveBatch = () => { 
+                if(batchItems.length===0 || batchItems.some(i=>!i.content)) return showToast("请填写货物名", "warning"); 
+                batchItems.forEach(i=>updateGoodsLibrary(i.content)); 
+                setPackages([...batchItems.map(item => ({ 
+                    id: Date.now()+Math.random(), 
+                    tracking: item.tracking, 
+                    content: item.content, 
+                    quantity: Number(item.quantity) || 1, 
+                    note: item.note||'', 
+                    verified: false, 
+                    timestamp: Date.now() 
+                })), ...packages]); 
+                setIsBatchModalOpen(false); setBatchItems([]); setScannedImage(null); 
+                showToast(`成功录入 ${batchItems.length} 件`);
+            };
+
+            const exportBackup = () => { 
+                const b=new Blob([JSON.stringify({version:'2.0',packages,goodsList},null,2)],{type:'application/json'}); 
+                const a=document.createElement('a'); a.href=URL.createObjectURL(b); 
+                a.download=`ScanKuaid_Backup.json`; document.body.appendChild(a); a.click(); document.body.removeChild(a); 
+                showToast("备份已下载");
+            };
+            
+            const handleRestore = (e) => { 
+                const r=new FileReader(); 
+                r.onload=(ev)=>{
+                    try{
+                        const d=JSON.parse(ev.target.result); 
+                        confirmAction("恢复数据", `确定恢复 ${d.packages?.length} 条数据？当前数据将被覆盖。`, () => {
+                            if(d.packages) setPackages(d.packages);
+                            if(d.goodsList) setGoodsList(d.goodsList); 
+                            showToast("恢复成功"); 
+                            setIsSettingsOpen(false);
+                            closeDialog();
+                        }, 'primary');
+                    } catch(err){ showToast("文件错误", "error"); }
+                }; 
+                if(e.target.files[0]) r.readAsText(e.target.files[0]); 
+            };
+            
+            const exportExcel = () => { 
+                if(packages.length===0) return showToast("无数据", "warning"); 
+                let c="单号,货物,数量,备注,状态,时间\n"; 
+                packages.forEach(p=>{c+=`${p.tracking},${p.content},${p.quantity},${p.note},${p.verified?'已收':'待收'},${new Date(p.timestamp).toLocaleString()}\n`;}); 
+                const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(["\ufeff"+c],{type:'text/csv'})); 
+                a.download=`List.csv`; document.body.appendChild(a); a.click(); document.body.removeChild(a); 
+            };
 
             const filteredPackages = useMemo(() => packages.filter(p => { const match = (p.tracking+p.content+(p.note||'')).toLowerCase().includes(searchQuery.toLowerCase()); return match && (filterType==='pending'?!p.verified:p.verified); }), [packages, searchQuery, filterType]);
             const filteredGoods = useMemo(() => { const t = currentEditingIndex === 'global' ? globalFill.content : (batchItems[currentEditingIndex]?.content || ''); if (!t) return goodsList; return goodsList.filter(g => g.toLowerCase().includes(t.toLowerCase())); }, [goodsList, globalFill.content, batchItems, currentEditingIndex]);
             const selectedDayPackages = useMemo(() => { if(!selectedDayDetail || statsMode!=='month')return []; const d=new Date(selectedDayDetail); const s=new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime(); const e=new Date(d.getFullYear(),d.getMonth(),d.getDate(),23,59,59).getTime(); let data=packages.filter(p=>p.verified && (p.verifiedTime||p.timestamp)>=s && (p.verifiedTime||p.timestamp)<=e); if(selectedGood)data=data.filter(p=>(p.content||'').includes(selectedGood)); return data; }, [selectedDayDetail, packages, selectedGood, statsMode]);
 
             return (
-                <div className="min-h-screen pb-32 relative">
-                    <div className="sticky top-0 z-30 bg-[#F2F2F7]/90 backdrop-blur-md border-b border-gray-200 pt-safe-top">
-                        <div className="px-4 py-3 flex justify-between items-center">
-                            <h1 className="text-xl font-bold tracking-tight">快递核验 Ultra</h1>
-                            <div className="flex gap-4">
-                                <button onClick={() => setActiveTab(activeTab === 'list' ? 'stats' : 'list')} className={`p-2 transition-colors ${activeTab === 'stats' ? 'text-blue-600 bg-blue-100 rounded-full' : 'text-gray-500'}`}><Icons.BarChart size={22} /></button>
-                                <button onClick={() => setIsSettingsOpen(true)} className="p-2 text-blue-600"><Icons.Settings size={22} /></button>
+                <div className="min-h-screen pb-24">
+                    {/* --- 全局 Toast --- */}
+                    {toast && <div className="fixed top-safe-top mt-4 left-1/2 transform -translate-x-1/2 z-[100] bg-white/90 backdrop-blur-md px-6 py-3 rounded-full text-[15px] font-medium shadow-xl border border-black/5 animate-pop flex items-center gap-2">
+                        {toast.type === 'success' && <Icons.CheckCircle className="w-5 h-5 text-[#34C759]" />}
+                        {toast.type === 'warning' && <Icons.Alert className="w-5 h-5 text-[#FF9500]" />}
+                        {toast.type === 'error' && <Icons.Alert className="w-5 h-5 text-[#FF3B30]" />}
+                        {toast.msg}
+                    </div>}
+
+                    {/* --- 全局确认弹窗 Dialog --- */}
+                    {dialog && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                            <div className="absolute inset-0 bg-black/20 backdrop-blur-sm animate-fade-in" onClick={closeDialog}></div>
+                            <div className="bg-white/90 backdrop-blur-xl w-full max-w-[280px] rounded-[14px] shadow-2xl animate-pop overflow-hidden text-center z-10">
+                                <div className="p-5">
+                                    <h3 className="text-[17px] font-bold text-black mb-1">{dialog.title}</h3>
+                                    <p className="text-[13px] text-gray-500 leading-tight">{dialog.content}</p>
+                                </div>
+                                <div className="grid grid-cols-2 border-t border-gray-300/50 divide-x divide-gray-300/50">
+                                    <button onClick={closeDialog} className="py-3 text-[17px] text-[#007AFF] active:bg-gray-100 font-medium">取消</button>
+                                    <button onClick={dialog.onConfirm} className={`py-3 text-[17px] font-semibold active:bg-gray-100 ${dialog.type==='danger'?'text-[#FF3B30]':'text-[#007AFF]'}`}>{dialog.confirmText}</button>
+                                </div>
                             </div>
+                        </div>
+                    )}
+
+                    {/* 顶部导航 */}
+                    <div className="sticky top-0 z-30 ios-blur pt-safe-top">
+                        <div className="px-5 pb-3 pt-3 flex justify-between items-center">
+                            <h1 className="text-[28px] font-bold text-black tracking-tight">快递核验</h1>
+                            <button onClick={() => setIsSettingsOpen(true)} className="bg-gray-200/50 p-2 rounded-full text-gray-500 active:bg-gray-300 transition-colors"><Icons.Settings className="w-6 h-6" /></button>
                         </div>
                         {activeTab === 'list' && (
                             <>
-                                <div className="px-4 pb-2"><div className="relative"><div className="absolute left-3 top-2 text-gray-400"><Icons.Search size={18} /></div><input type="text" className="w-full pl-9 pr-4 py-2 bg-gray-200/70 rounded-xl text-[15px] focus:bg-white focus:ring-2 focus:ring-blue-500/20 outline-none transition-all" placeholder="搜索单号/货物/备注..." value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} /></div></div>
-                                <div className="px-4 pb-3"><div className="bg-gray-200/70 p-1 rounded-lg flex"><button onClick={()=>setFilterType('pending')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${filterType==='pending'?'bg-white shadow-sm text-black font-semibold':'text-gray-500 font-medium'}`}>待收货 ({packages.filter(p=>!p.verified).length})</button><button onClick={()=>setFilterType('verified')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${filterType==='verified'?'bg-white shadow-sm text-black font-semibold':'text-gray-500 font-medium'}`}>已签收 ({packages.filter(p=>p.verified).length})</button></div></div>
+                                <div className="px-4 pb-2"><div className="bg-gray-200/50 rounded-[10px] px-3 py-2 flex items-center"><Icons.Search className="w-5 h-5 text-gray-400 mr-2" /><input type="text" className="w-full bg-transparent outline-none text-[17px]" placeholder="搜索单号/货物..." value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} /></div></div>
+                                <div className="px-4 pb-3 flex gap-4 text-[15px] font-medium text-gray-400">
+                                    <button onClick={()=>setFilterType('pending')} className={`pb-1 transition-colors ${filterType==='pending'?'text-black border-b-2 border-black':'hover:text-gray-600'}`}>待收货 ({packages.filter(p=>!p.verified).length})</button>
+                                    <button onClick={()=>setFilterType('verified')} className={`pb-1 transition-colors ${filterType==='verified'?'text-black border-b-2 border-black':'hover:text-gray-600'}`}>已入库 ({packages.filter(p=>p.verified).length})</button>
+                                </div>
                             </>
                         )}
                     </div>
 
+                    {/* 主列表 */}
                     {activeTab === 'list' ? (
-                        <div className="px-4 pt-3 space-y-3 animate-fade-in">
+                        <div className="px-4 pt-4 space-y-3 animate-fade-in pb-20">
                             {filteredPackages.map(pkg => (
-                                <div key={pkg.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 active:scale-[0.99] transition-transform relative overflow-hidden">
-                                    <div className="flex justify-between items-start mb-1"><div className="font-mono text-sm text-gray-400">{pkg.tracking}</div>{pkg.verified && <div className="text-green-500"><Icons.CheckCircle /></div>}</div>
-                                    <div className="flex justify-between items-start mb-2"><div className="flex flex-col"><div className="flex items-center gap-2"><span className="font-bold text-lg text-slate-800">{pkg.content}</span><span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs font-bold">x{pkg.quantity || 1}</span></div>{pkg.note && <div className="text-xs text-orange-500 mt-1 font-medium bg-orange-50 inline-block px-1.5 py-0.5 rounded max-w-fit">注: {pkg.note}</div>}</div><div className="text-xs text-gray-400 mt-1">{new Date(pkg.timestamp).toLocaleDateString()}</div></div>
-                                    <div className="flex gap-2 pt-2 border-t border-gray-50">
-                                        <button onClick={()=>toggleVerify(pkg.id)} className={`flex-1 py-2 text-center text-xs font-bold rounded-xl transition-colors ${pkg.verified?'bg-gray-100 text-gray-500':'bg-blue-600 text-white shadow-lg shadow-blue-100'}`}>{pkg.verified?'撤销签收':'确认收货'}</button>
-                                        <button onClick={(e)=>{e.stopPropagation(); setDeleteTargetId(pkg.id)}} className="px-4 text-gray-300 hover:text-red-500"><Icons.Trash2 /></button>
+                                <div key={pkg.id} className="bg-white rounded-[20px] p-4 shadow-sm active:scale-[0.99] transition-transform">
+                                    <div className="flex justify-between items-start mb-1">
+                                        <div className="font-mono text-[13px] text-gray-400 tracking-wide">{pkg.tracking}</div>
+                                        {pkg.verified && <Icons.CheckCircle className="w-5 h-5 text-[#34C759]" />}
+                                    </div>
+                                    <div className="flex justify-between items-start mb-3">
+                                        <div>
+                                            <div className="text-[17px] font-semibold text-black">{pkg.content} <span className="text-[14px] font-normal text-gray-400 ml-1">x{pkg.quantity}</span></div>
+                                            {pkg.note && <div className="inline-block mt-1 px-2 py-0.5 bg-orange-50 text-orange-600 text-[12px] rounded-md font-medium">{pkg.note}</div>}
+                                        </div>
+                                        <div className="text-[13px] text-gray-400 mt-1">{new Date(pkg.timestamp).toLocaleDateString()}</div>
+                                    </div>
+                                    <div className="flex gap-3 pt-2 border-t border-gray-100">
+                                        <button onClick={()=>toggleVerify(pkg.id)} className={`flex-1 py-2.5 rounded-[12px] text-[15px] font-semibold transition-colors ${pkg.verified?'bg-gray-100 text-gray-500':'bg-[#007AFF] text-white shadow-md shadow-blue-200'}`}>{pkg.verified?'撤销入库':'确认收货'}</button>
+                                        <button onClick={(e)=>{e.stopPropagation(); setDeleteTargetId(pkg.id); confirmAction("删除记录", `确定删除“${pkg.content}”吗？`, confirmDelete);}} className="w-12 flex items-center justify-center bg-gray-100 text-gray-400 rounded-[12px] active:bg-red-50 active:text-red-500 transition-colors"><Icons.Trash2 className="w-5 h-5" /></button>
                                     </div>
                                 </div>
                             ))}
-                            {filteredPackages.length===0 && <div className="text-center py-10 text-gray-400 text-sm">列表为空</div>}
+                            {filteredPackages.length===0 && <div className="text-center py-12 text-gray-400 text-[15px]">暂无包裹数据</div>}
                         </div>
                     ) : (
+                        // 统计看板 (Bento Grid)
                         <div className="px-4 pt-4 space-y-6 animate-fade-in pb-20">
                             <div>
-                                <h3 className="text-xs font-bold text-gray-400 uppercase mb-3 px-1">数据总览</h3>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="bg-white p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-blue-100 relative overflow-hidden"><div className="absolute top-0 right-0 p-2 opacity-10"><Icons.CheckCircle size={48} className="text-blue-500"/></div><div className="text-xs text-gray-500 font-medium uppercase mb-1">今日签收</div><div className="text-3xl font-bold text-blue-600 tracking-tight">{statsData.summary.todayReceived}</div></div>
-                                    <div className="bg-white p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-orange-100 relative overflow-hidden"><div className="absolute top-0 right-0 p-2 opacity-10"><Icons.Alert size={48} className="text-orange-500"/></div><div className="text-xs text-gray-500 font-medium uppercase mb-1">待收包裹</div><div className="text-3xl font-bold text-orange-500 tracking-tight">{statsData.summary.pending}</div></div>
-                                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100"><div className="text-xs text-gray-400 font-medium uppercase mb-1">本月累计</div><div className="text-2xl font-bold text-slate-700">{statsData.summary.monthReceived}</div></div>
-                                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100"><div className="text-xs text-gray-400 font-medium uppercase mb-1">年度累计</div><div className="text-2xl font-bold text-slate-700">{statsData.summary.yearReceived}</div></div>
+                                <h3 className="text-[13px] font-semibold text-gray-400 uppercase mb-3 ml-1">今日概览</h3>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-white p-5 rounded-[22px] shadow-sm relative overflow-hidden">
+                                        <div className="absolute top-3 right-3 opacity-10"><Icons.CheckCircle className="w-12 h-12 text-[#007AFF]"/></div>
+                                        <div className="text-[13px] text-gray-500 font-medium mb-1">今日签收</div>
+                                        <div className="text-[32px] font-bold text-[#007AFF] tracking-tight">{statsData.summary.todayReceived}</div>
+                                    </div>
+                                    <div className="bg-white p-5 rounded-[22px] shadow-sm relative overflow-hidden">
+                                        <div className="absolute top-3 right-3 opacity-10"><Icons.Alert className="w-12 h-12 text-[#FF9500]"/></div>
+                                        <div className="text-[13px] text-gray-500 font-medium mb-1">待收包裹</div>
+                                        <div className="text-[32px] font-bold text-[#FF9500] tracking-tight">{statsData.summary.pending}</div>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 mt-4">
+                                    <div className="bg-white px-5 py-4 rounded-[18px] shadow-sm flex flex-col"><span className="text-[12px] text-gray-400 font-medium uppercase">本月累计</span><span className="text-xl font-bold text-gray-800">{statsData.summary.monthReceived}</span></div>
+                                    <div className="bg-white px-5 py-4 rounded-[18px] shadow-sm flex flex-col"><span className="text-[12px] text-gray-400 font-medium uppercase">年度累计</span><span className="text-xl font-bold text-gray-800">{statsData.summary.yearReceived}</span></div>
                                 </div>
                             </div>
 
+                            {/* 日历 */}
                             <div>
                                 <div className="flex justify-between items-center mb-3 px-1">
-                                    <span className="font-bold text-lg text-slate-800">{currentDate.getFullYear()}年 {currentDate.getMonth()+1}月</span>
+                                    <span className="text-[20px] font-bold text-black">{currentDate.getFullYear()}年 {currentDate.getMonth()+1}月</span>
                                     <div className="flex gap-2">
-                                        {!(currentDate.getMonth()===new Date().getMonth() && currentDate.getFullYear()===new Date().getFullYear()) && <button onClick={()=>setCurrentDate(new Date())} className="text-[10px] bg-blue-50 text-blue-600 px-2 py-1 rounded-full font-bold">今天</button>}
-                                        <button onClick={()=>{const d=new Date(currentDate); d.setMonth(d.getMonth()-1); setCurrentDate(d)}} className="p-1 text-gray-400 bg-white rounded-lg shadow-sm"><Icons.ChevronLeft size={18}/></button>
-                                        <button onClick={()=>{const d=new Date(currentDate); d.setMonth(d.getMonth()+1); setCurrentDate(d)}} className="p-1 text-gray-400 bg-white rounded-lg shadow-sm"><Icons.ChevronRight size={18}/></button>
+                                        {!(currentDate.getMonth()===new Date().getMonth() && currentDate.getFullYear()===new Date().getFullYear()) && <button onClick={()=>setCurrentDate(new Date())} className="text-[11px] bg-[#E5F1FF] text-[#007AFF] px-2.5 py-1 rounded-full font-bold">回今天</button>}
+                                        <button onClick={()=>{const d=new Date(currentDate); d.setMonth(d.getMonth()-1); setCurrentDate(d)}} className="p-1.5 bg-white text-gray-400 rounded-lg shadow-sm active:opacity-60"><Icons.ChevronLeft className="w-5 h-5"/></button>
+                                        <button onClick={()=>{const d=new Date(currentDate); d.setMonth(d.getMonth()+1); setCurrentDate(d)}} className="p-1.5 bg-white text-gray-400 rounded-lg shadow-sm active:opacity-60"><Icons.ChevronRight className="w-5 h-5"/></button>
                                     </div>
                                 </div>
-                                <div className="bg-white rounded-3xl p-4 shadow-sm border border-gray-100">
-                                    <div className="grid grid-cols-7 mb-4 text-center text-xs text-gray-400 font-medium"><div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div></div>
+                                <div className="bg-white rounded-[24px] p-5 shadow-sm">
+                                    <div className="grid grid-cols-7 mb-4 text-center text-[12px] text-gray-400 font-medium"><div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div></div>
                                     <div className="calendar-grid">
                                         {statsData.calendarDays.map((i,x)=>(i.empty?<div key={x}/>:<div key={x} onClick={()=>i.hasData&&setSelectedDayDetail(i.date.getTime())} className={`calendar-day ${i.isToday?'today-highlight':(i.hasData?'active cursor-pointer':'')} ${selectedDayDetail===i.date.getTime()?'selected':''}`}>{i.day}{i.hasData&&<div className="calendar-dot"/>}</div>))}
                                     </div>
                                 </div>
                             </div>
-                            {selectedDayPackages.length>0 && <div className="bg-white rounded-2xl divide-y divide-gray-50 p-1 animate-slide-up border border-gray-100">{selectedDayPackages.map(p=>(<div key={p.id} className="p-3 flex justify-between items-center"><div><div className="font-bold text-sm text-slate-800">{p.content} <span className="text-gray-400 text-xs">x{p.quantity}</span></div><div className="text-[10px] text-gray-400 font-mono">{p.tracking}</div></div><Icons.CheckCircle className="text-green-500" size={16}/></div>))}</div>}
+                            
+                            {selectedDayPackages.length>0 && <div className="bg-white rounded-[20px] p-1 shadow-sm animate-slide-up space-y-1">{selectedDayPackages.map(p=>(<div key={p.id} className="p-4 flex justify-between items-center border-b border-gray-50 last:border-0"><div><div className="font-semibold text-[16px] text-black">{p.content} <span className="text-gray-400 text-xs font-normal">x{p.quantity}</span></div><div className="text-[12px] text-gray-400 font-mono mt-0.5">{p.tracking}</div></div><Icons.CheckCircle className="w-5 h-5 text-[#34C759]"/></div>))}</div>}
                         </div>
                     )}
 
-                    <div className="fixed bottom-8 left-0 right-0 px-8 flex justify-between items-end z-20 pointer-events-none">
-                        <button onClick={()=>setIsVerifyModalOpen(true)} className="pointer-events-auto bg-[#1C1C1E] text-white w-14 h-14 rounded-full shadow-2xl flex flex-col items-center justify-center active:scale-95 transition-transform"><Icons.Scan size={24} /><span className="text-[9px] font-bold mt-0.5">核验</span></button>
-                        <button onClick={()=>setIsBatchModalOpen(true)} className="pointer-events-auto bg-blue-600 text-white w-14 h-14 rounded-full shadow-xl shadow-blue-500/40 flex flex-col items-center justify-center active:scale-95 transition-transform"><Icons.Plus size={28} /><span className="text-[9px] font-bold mt-0.5">录入</span></button>
+                    {/* 底部导航栏 */}
+                    <div className="fixed bottom-0 w-full ios-blur pb-safe-bottom z-30">
+                        <div className="flex justify-around items-center h-[60px]">
+                            <button onClick={() => setActiveTab('list')} className={`flex flex-col items-center space-y-1 w-20 active:opacity-50 transition-colors ${activeTab === 'list' ? 'text-[#007AFF]' : 'text-gray-400'}`}><Icons.Package className="w-6 h-6" /><span className="text-[10px] font-medium">包裹</span></button>
+                            <div className="w-10"></div> {/* 占位 */}
+                            <button onClick={() => setActiveTab('stats')} className={`flex flex-col items-center space-y-1 w-20 active:opacity-50 transition-colors ${activeTab === 'stats' ? 'text-[#007AFF]' : 'text-gray-400'}`}><Icons.BarChart className="w-6 h-6" /><span className="text-[10px] font-medium">趋势</span></button>
+                        </div>
                     </div>
 
-                    {deleteTargetId && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={()=>setDeleteTargetId(null)}><div className="bg-white rounded-2xl p-6 w-64 text-center animate-pop" onClick={e=>e.stopPropagation()}><h3 className="font-bold mb-4">确认删除？</h3><div className="flex gap-2"><button onClick={()=>setDeleteTargetId(null)} className="flex-1 bg-gray-100 py-2 rounded-xl font-bold text-sm text-gray-600">取消</button><button onClick={confirmDelete} className="flex-1 bg-red-500 text-white py-2 rounded-xl font-bold text-sm shadow-lg shadow-red-200">删除</button></div></div></div>}
+                    {/* 悬浮操作按钮 (右下角) */}
+                    <div className="fixed bottom-24 right-5 flex flex-col gap-4 z-40 pointer-events-none">
+                        <button onClick={()=>setIsVerifyModalOpen(true)} className="pointer-events-auto w-[56px] h-[56px] bg-black text-white rounded-full shadow-xl flex items-center justify-center active:scale-90 transition-transform"><Icons.Scan className="w-6 h-6" /></button>
+                        <button onClick={()=>setIsBatchModalOpen(true)} className="pointer-events-auto w-[56px] h-[56px] bg-[#007AFF] text-white rounded-full shadow-xl shadow-blue-200 flex items-center justify-center active:scale-90 transition-transform"><Icons.Plus className="w-7 h-7" /></button>
+                    </div>
+
+                    {/* --- 弹窗组件 --- */}
                     
-                    {isSettingsOpen && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={()=>setIsSettingsOpen(false)}><div className="bg-white w-72 rounded-3xl p-5 animate-pop" onClick={e=>e.stopPropagation()}><div className="flex justify-between items-center mb-5"><h2 className="font-bold text-xl">设置</h2><button onClick={()=>setIsSettingsOpen(false)} className="bg-gray-100 p-1.5 rounded-full"><Icons.X size={18}/></button></div><div className="space-y-3"><button onClick={exportBackup} className="w-full py-3 bg-gray-50 hover:bg-gray-100 rounded-2xl flex items-center justify-center gap-2 font-bold text-sm text-gray-700 transition-colors"><Icons.Download size={18}/> 备份数据</button><label className="w-full py-3 bg-gray-50 hover:bg-gray-100 rounded-2xl flex items-center justify-center gap-2 font-bold text-sm text-gray-700 transition-colors cursor-pointer"><Icons.Upload size={18}/> 恢复备份<input type="file" ref={fileInputRef} onChange={handleRestore} className="hidden" accept=".json"/></label><button onClick={exportExcel} className="w-full py-3 bg-green-50 text-green-700 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 border border-green-100"><Icons.Note size={18}/> 导出Excel</button></div><div className="mt-6 pt-4 border-t border-gray-100"><div className="text-xs font-bold text-gray-400 uppercase mb-2">常用货物管理</div><div className="flex flex-wrap gap-2">{goodsList.map(g=><span key={g} onClick={()=>{if(confirm(`删除 ${g}?`)) setGoodsList(goodsList.filter(i=>i!==g))}} className="px-2 py-1 bg-gray-100 rounded-lg text-xs text-gray-500 hover:bg-red-50 hover:text-red-500 cursor-pointer transition-colors">{g}</span>)}</div></div></div></div>}
+                    {/* 1. 设置 Modal */}
+                    {isSettingsOpen && <div className="fixed inset-0 z-50 flex items-center justify-center p-6"><div className="absolute inset-0 bg-black/20 backdrop-blur-sm animate-fade-in" onClick={()=>setIsSettingsOpen(false)}></div><div className="bg-white w-full max-w-[320px] rounded-[24px] p-6 shadow-2xl animate-pop relative z-10"><div className="flex justify-between items-center mb-6"><h2 className="text-[20px] font-bold text-black">设置</h2><button onClick={()=>setIsSettingsOpen(false)} className="bg-gray-100 p-2 rounded-full active:opacity-60"><Icons.X className="w-5 h-5 text-gray-500"/></button></div><div className="space-y-3"><div className="p-4 bg-[#F2F2F7] rounded-[16px] flex items-center justify-between cursor-pointer active:bg-gray-200 transition-colors" onClick={exportBackup}><div className="flex items-center gap-3"><div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center"><Icons.Download className="w-4 h-4"/></div><span className="font-semibold text-[15px]">备份数据</span></div></div><label className="p-4 bg-[#F2F2F7] rounded-[16px] flex items-center justify-between cursor-pointer active:bg-gray-200 transition-colors"><div className="flex items-center gap-3"><div className="w-8 h-8 bg-green-100 text-green-600 rounded-full flex items-center justify-center"><Icons.Upload className="w-4 h-4"/></div><span className="font-semibold text-[15px]">恢复数据</span></div><input type="file" ref={fileInputRef} onChange={handleRestore} className="hidden" accept=".json"/></label><div className="p-4 bg-[#F2F2F7] rounded-[16px] flex items-center justify-between cursor-pointer active:bg-gray-200 transition-colors" onClick={exportExcel}><div className="flex items-center gap-3"><div className="w-8 h-8 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center"><Icons.Note className="w-4 h-4"/></div><span className="font-semibold text-[15px]">导出 Excel</span></div></div></div><div className="mt-6 pt-4 border-t border-gray-100"><div className="text-[12px] font-bold text-gray-400 uppercase mb-3">常用货物</div><div className="flex flex-wrap gap-2">{goodsList.map(g=><span key={g} onClick={()=>{confirmAction("删除货物", `从常用库中删除“${g}”？`, () => setGoodsList(goodsList.filter(i=>i!==g)))}} className="px-2.5 py-1 bg-[#F2F2F7] rounded-lg text-[13px] text-gray-600 active:bg-red-50 active:text-red-500 transition-colors cursor-pointer">{g}</span>)}</div></div></div></div>}
                     
+                    {/* 2. 扫码 Modal */}
                     {isVerifyModalOpen && (
                         <div className="fixed inset-0 z-50 bg-black flex flex-col">
-                            <div className="absolute top-0 left-0 right-0 z-20 flex justify-between items-center p-4 pt-safe-top bg-gradient-to-b from-black/80 to-transparent"><div className="text-white text-sm font-medium bg-white/10 px-3 py-1.5 rounded-full backdrop-blur-md border border-white/10">今日已出: <span className="font-bold text-white ml-1">{statsData.summary.todayReceived}</span></div><button onClick={()=>setIsVerifyModalOpen(false)} className="bg-white/10 p-2 rounded-full backdrop-blur-md text-white border border-white/10"><Icons.X /></button></div>
+                            <div className="absolute top-0 left-0 right-0 z-20 flex justify-between items-center px-5 pt-safe-top pb-4 bg-gradient-to-b from-black/80 to-transparent"><div className="text-white text-[13px] font-medium bg-white/20 px-3 py-1.5 rounded-full backdrop-blur-md border border-white/10">今日已出: <span className="font-bold ml-1">{statsData.summary.todayReceived}</span></div><button onClick={()=>setIsVerifyModalOpen(false)} className="bg-white/20 p-2 rounded-full backdrop-blur-md border border-white/10 active:opacity-60"><Icons.X className="w-6 h-6 text-white"/></button></div>
                             <div className="flex-1 relative flex items-center justify-center bg-black overflow-hidden">
                                 <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover opacity-80" muted playsInline></video>
-                                <div className="absolute inset-0 z-10 flex items-center justify-center"><div className="absolute inset-0 bg-black/60"></div><div className="w-64 h-40 relative z-20 bg-transparent rounded-2xl shadow-[0_0_0_9999px_rgba(0,0,0,0.6)] overflow-hidden"><div className="absolute inset-0 border-2 border-white/30 rounded-2xl"></div><div className="absolute top-0 left-0 w-6 h-6 border-l-4 border-t-4 border-blue-500 rounded-tl-lg"></div><div className="absolute top-0 right-0 w-6 h-6 border-r-4 border-t-4 border-blue-500 rounded-tr-lg"></div><div className="absolute bottom-0 left-0 w-6 h-6 border-l-4 border-b-4 border-blue-500 rounded-bl-lg"></div><div className="absolute bottom-0 right-0 w-6 h-6 border-r-4 border-b-4 border-blue-500 rounded-br-lg"></div><div className="absolute left-2 right-2 h-0.5 bg-blue-400 shadow-[0_0_15px_rgba(59,130,246,1)] scan-line rounded-full"></div></div><div className="absolute mt-52 text-white/70 text-sm font-medium z-20 tracking-wide">将条码放入框内自动识别</div></div>
+                                <div className="absolute inset-0 z-10 flex items-center justify-center"><div className="w-64 h-40 relative border border-white/40 rounded-[20px] shadow-[0_0_0_9999px_rgba(0,0,0,0.6)] overflow-hidden"><div className="absolute top-0 left-0 w-6 h-6 border-l-4 border-t-4 border-[#007AFF] rounded-tl-lg"></div><div className="absolute top-0 right-0 w-6 h-6 border-r-4 border-t-4 border-[#007AFF] rounded-tr-lg"></div><div className="absolute bottom-0 left-0 w-6 h-6 border-l-4 border-b-4 border-[#007AFF] rounded-bl-lg"></div><div className="absolute bottom-0 right-0 w-6 h-6 border-r-4 border-b-4 border-[#007AFF] rounded-br-lg"></div><div className="absolute left-4 right-4 h-0.5 bg-[#007AFF] shadow-[0_0_10px_rgba(0,122,255,0.8)] scan-line rounded-full"></div></div><div className="absolute mt-56 text-white/70 text-[13px] font-medium tracking-wide">将条码放入框内</div></div>
                             </div>
-                            <div className="bg-[#1C1C1E] rounded-t-3xl border-t border-white/10 overflow-hidden pb-safe-bottom min-h-[180px] flex flex-col justify-end relative">{verifyStatus !== 'idle' && scanResultDetail ? (<div className="p-6 animate-slide-up"><div className={`flex items-start gap-4 p-4 rounded-2xl mb-2 ${verifyStatus==='success'?'bg-green-500/10 border border-green-500/30': verifyStatus==='warning'?'bg-orange-500/10 border border-orange-500/30':'bg-red-500/10 border border-red-500/30'}`}><div className={`p-3 rounded-full ${verifyStatus==='success'?'bg-green-500 text-white': verifyStatus==='warning'?'bg-orange-500 text-white':'bg-red-500 text-white'}`}>{verifyStatus==='success'?<Icons.CheckCircle size={24}/>:<Icons.Alert size={24}/>}</div><div className="flex-1"><div className={`text-sm font-bold uppercase mb-1 ${verifyStatus==='success'?'text-green-400': verifyStatus==='warning'?'text-orange-400':'text-red-400'}`}>{verifyStatus==='success'?'核验通过': verifyStatus==='warning'?'重复扫描':'未找到单号'}</div><div className="text-white text-xl font-bold mb-1">{scanResultDetail.content} <span className="text-sm font-normal text-white/60">x{scanResultDetail.quantity}</span></div><div className="text-white/40 text-xs font-mono">{scanResultDetail.tracking}</div>{scanResultDetail.note && <div className="mt-2 text-xs text-orange-300 bg-orange-900/30 px-2 py-1 rounded inline-block">备注: {scanResultDetail.note}</div>}</div></div></div>) : (<div className="p-6 text-center text-white/30 text-sm"><div className="mb-2">等待扫描...</div><div className="text-xs opacity-50">支持后四位模糊匹配</div></div>)}</div>
+                            <div className="bg-[#1C1C1E] rounded-t-[24px] border-t border-white/10 pb-safe-bottom min-h-[160px] flex flex-col justify-end">
+                                {verifyStatus !== 'idle' && scanResultDetail ? (
+                                    <div className="p-6 animate-slide-up">
+                                        <div className={`flex items-start gap-4 p-4 rounded-[18px] ${verifyStatus==='success'?'bg-[#34C759]/10 border border-[#34C759]/20': verifyStatus==='warning'?'bg-[#FF9500]/10 border border-[#FF9500]/20':'bg-[#FF3B30]/10 border border-[#FF3B30]/20'}`}>
+                                            <div className={`p-2 rounded-full ${verifyStatus==='success'?'bg-[#34C759] text-white': verifyStatus==='warning'?'bg-[#FF9500] text-white':'bg-[#FF3B30] text-white'}`}>{verifyStatus==='success'?<Icons.CheckCircle className="w-6 h-6"/>:<Icons.Alert className="w-6 h-6"/>}</div>
+                                            <div className="flex-1">
+                                                <div className={`text-[12px] font-bold uppercase mb-1 ${verifyStatus==='success'?'text-[#34C759]': verifyStatus==='warning'?'text-[#FF9500]':'text-[#FF3B30]'}`}>{verifyStatus==='success'?'核验通过': verifyStatus==='warning'?'重复扫描':'未找到单号'}</div>
+                                                <div className="text-white text-[18px] font-bold mb-1">{scanResultDetail.content} <span className="text-[14px] font-normal text-white/60">x{scanResultDetail.quantity}</span></div>
+                                                <div className="text-white/40 text-[12px] font-mono">{scanResultDetail.tracking}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (<div className="p-6 text-center text-white/30 text-[13px]"><p className="mb-1">等待扫描...</p><p className="opacity-50 text-[11px]">支持后四位模糊匹配</p></div>)}
+                            </div>
                         </div>
                     )}
                     
+                    {/* 3. 录入 Modal */}
                     {isBatchModalOpen && (
                         <div className="fixed inset-0 z-50 bg-[#F2F2F7] flex flex-col animate-slide-up">
-                            <div className="px-4 py-3 bg-white border-b border-gray-200 flex justify-between items-center sticky top-0 z-20"><button onClick={()=>{setIsBatchModalOpen(false);setBatchItems([]);}} className="text-gray-500 font-medium">取消</button><h2 className="font-bold text-lg text-black">录入快递</h2><button onClick={saveBatch} className="text-blue-600 font-bold">完成</button></div>
-                            <div className="flex-1 overflow-y-auto p-4 pb-32">
-                                <div className="bg-white rounded-2xl p-5 shadow-sm mb-6">
-                                    <div className="text-xs font-bold text-gray-400 uppercase mb-3 flex items-center gap-1">默认信息 <span className="text-[10px] bg-gray-100 px-1 rounded font-normal">选填</span></div>
+                            <div className="px-5 py-4 bg-white/80 backdrop-blur-md border-b border-gray-200/50 flex justify-between items-center sticky top-0 z-20 pt-safe-top">
+                                <button onClick={()=>{setIsBatchModalOpen(false);setBatchItems([]);}} className="text-gray-500 font-medium text-[16px]">取消</button>
+                                <h2 className="font-bold text-[18px] text-black">录入快递</h2>
+                                <div className="w-8"></div> 
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-5 pb-32">
+                                <div className="bg-white rounded-[22px] p-5 shadow-sm mb-6">
+                                    <div className="text-[12px] font-bold text-gray-400 uppercase mb-3 flex items-center gap-1">默认设置 <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-normal">选填</span></div>
                                     <div className="space-y-3">
                                         <div className="flex gap-3 relative z-30">
-                                            <div className="flex-[1.618] group relative">
-                                                <input type="text" className="w-full bg-gray-50 ios-input py-3 px-4 rounded-xl text-base font-medium outline-none text-gray-900 placeholder-gray-400" placeholder="货物名称" value={globalFill.content} onFocus={()=>{setCurrentEditingIndex('global');setShowSuggestions(true);}} onChange={e=>setGlobalFill({...globalFill,content:e.target.value})}/>
-                                                {showSuggestions && currentEditingIndex==='global' && (<div className="absolute top-full left-0 w-full mt-2 bg-white/95 backdrop-blur-xl shadow-2xl rounded-xl z-50 border border-gray-100 max-h-48 overflow-y-auto animate-pop"><div className="px-3 py-2 text-[10px] text-gray-400 font-bold border-b border-gray-100 flex justify-between"><span>历史记录</span><span onClick={()=>setShowSuggestions(false)}>关闭</span></div>{filteredGoods.map(g=><div key={g} onMouseDown={(e)=>{e.preventDefault();setGlobalFill({...globalFill,content:g});setShowSuggestions(false);}} className="px-4 py-3 text-sm font-medium border-b border-gray-50 last:border-0 hover:bg-gray-50 active:bg-blue-50 transition-colors cursor-pointer text-slate-700">{g}</div>)}</div>)}
+                                            <div className="flex-[1.6] group relative">
+                                                <input type="text" maxLength={66} className="w-full bg-[#F2F2F7] ios-input py-3 px-4 rounded-[14px] text-[16px] font-medium outline-none" placeholder="货物名称" value={globalFill.content} onFocus={()=>{setCurrentEditingIndex('global');setShowSuggestions(true);}} onChange={e=>setGlobalFill({...globalFill,content:e.target.value})}/>
+                                                {showSuggestions && currentEditingIndex==='global' && (<div className="absolute top-full left-0 w-full mt-2 bg-white/90 backdrop-blur-xl shadow-xl rounded-[14px] z-50 border border-gray-100 max-h-48 overflow-y-auto animate-pop"><div className="px-4 py-2 text-[11px] text-gray-400 font-bold border-b border-gray-100 flex justify-between"><span>历史记录</span><span onClick={()=>setShowSuggestions(false)} className="text-blue-500">关闭</span></div>{filteredGoods.map(g=><div key={g} onMouseDown={(e)=>{e.preventDefault();setGlobalFill({...globalFill,content:g});setShowSuggestions(false);}} className="px-4 py-3 text-[15px] font-medium border-b border-gray-50 last:border-0 active:bg-gray-50 transition-colors cursor-pointer text-gray-800">{g}</div>)}</div>)}
                                             </div>
-                                            <input type="number" className="flex-1 bg-gray-50 ios-input py-3 px-2 rounded-xl text-center text-base font-medium outline-none text-gray-900" placeholder="数量" value={globalFill.quantity} onChange={e=>setGlobalFill({...globalFill,quantity:e.target.value})}/>
+                                            <input type="text" inputMode="numeric" className="flex-1 bg-[#F2F2F7] ios-input py-3 px-2 rounded-[14px] text-center text-[16px] font-medium outline-none" placeholder="数量" value={globalFill.quantity} onChange={e=>setGlobalFill({...globalFill,quantity:limitQuantity(e.target.value)})}/>
                                         </div>
-                                        <div className="relative"><div className="absolute left-3 top-3.5 text-gray-400"><Icons.Note size={18}/></div><input type="text" className="w-full bg-gray-50 ios-input py-3 pl-10 pr-4 rounded-xl text-sm font-medium outline-none text-gray-900 placeholder-gray-400" placeholder="添加备注" value={globalFill.note} onChange={e=>setGlobalFill({...globalFill,note:e.target.value})}/></div>
+                                        <div className="relative">
+                                            <div className="absolute left-3.5 top-3.5 text-gray-400"><Icons.Note className="w-5 h-5"/></div>
+                                            <input type="text" maxLength={666} className="w-full bg-[#F2F2F7] ios-input py-3 pl-11 pr-4 rounded-[14px] text-[15px] font-medium outline-none" placeholder="备注 (选填)" value={globalFill.note} onChange={e=>setGlobalFill({...globalFill,note:e.target.value})}/>
+                                        </div>
                                     </div>
-                                    <button onClick={applyGlobalToAll} className="w-full mt-4 py-2.5 bg-blue-50 text-blue-600 text-sm font-bold rounded-xl active:scale-[0.98] transition-transform">应用到下方</button>
+                                    <button onClick={applyGlobalToAll} className="w-full mt-4 py-3 bg-[#E5F1FF] text-[#007AFF] text-[15px] font-bold rounded-[14px] active:scale-[0.98] transition-transform">应用到下方</button>
                                 </div>
-                                <div className="text-xs font-bold text-gray-400 uppercase mb-3 pl-2">扫码添加</div>
+
                                 <div className="grid grid-cols-2 gap-3 mb-6">
-                                    <label className="bg-white border-2 border-dashed border-gray-200 h-28 rounded-2xl flex flex-col items-center justify-center text-gray-400 active:bg-gray-50 active:border-blue-300 transition-all cursor-pointer relative overflow-hidden"><input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} disabled={analyzing}/>{analyzing ? <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div> : <><Icons.Camera size={28} className="text-blue-500 mb-2"/><span className="text-xs font-bold text-slate-600">从相册选图</span></>}</label>
-                                    <div className="bg-white rounded-2xl p-3 shadow-sm flex flex-col justify-between"><input className="w-full text-sm font-mono border-b border-gray-100 pb-2 outline-none bg-transparent" placeholder="输入单号后4位..." value={manualInputCode} onChange={e=>setManualInputCode(e.target.value)}/><button onClick={addManualCode} className="w-full bg-black text-white text-xs font-bold py-2 rounded-xl mt-2 active:opacity-80">手动添加</button></div>
+                                    <label className="bg-white h-28 rounded-[20px] flex flex-col items-center justify-center text-[#007AFF] shadow-sm active:bg-gray-50 transition-all cursor-pointer relative overflow-hidden">
+                                        <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} disabled={analyzing}/>
+                                        {analyzing ? <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#007AFF]"></div> : <><Icons.Camera className="w-8 h-8 mb-2"/><span className="text-[13px] font-bold">相册识别</span></>}
+                                    </label>
+                                    <div className="bg-white rounded-[20px] p-4 shadow-sm flex flex-col justify-between">
+                                        <input className="w-full text-[15px] font-mono border-b border-gray-100 pb-2 outline-none bg-transparent" placeholder="单号后4位..." maxLength={30} value={manualInputCode} onChange={e=>setManualInputCode(e.target.value)}/>
+                                        <button onClick={addManualCode} className="w-full bg-black text-white text-[13px] font-bold py-2 rounded-[12px] mt-2 active:opacity-80">手动添加</button>
+                                    </div>
                                 </div>
+
                                 {batchItems.map((item,i)=>(
-                                    <div key={i} className="bg-white p-4 rounded-2xl mb-3 shadow-sm border border-gray-100 relative">
-                                        <div className="flex justify-between items-center mb-3"><span className="font-mono font-bold text-sm text-slate-800 tracking-wide">{item.tracking}</span><button onClick={()=>removeBatchItem(i)} className="text-gray-300 hover:text-red-500"><Icons.X size={18}/></button></div>
+                                    <div key={i} className="bg-white p-4 rounded-[20px] mb-3 shadow-sm border border-gray-50 relative">
+                                        <div className="flex justify-between items-center mb-3"><span className="font-mono font-bold text-[14px] text-gray-800 tracking-wide">{item.tracking}</span><button onClick={()=>removeBatchItem(i)} className="text-gray-300 active:text-red-500"><Icons.X className="w-5 h-5"/></button></div>
                                         <div className="space-y-2">
                                             <div className="flex gap-2 relative z-10">
-                                                <input className="flex-[1.618] bg-gray-50 px-3 py-2 rounded-lg text-sm font-medium outline-none focus:bg-white focus:ring-1 focus:ring-blue-500" placeholder="货物名" value={item.content} onFocus={()=>{setCurrentEditingIndex(i);setShowSuggestions(true);}} onChange={e=>updateBatchItem(i,'content',e.target.value)}/>
-                                                <input className="flex-1 bg-gray-50 text-center rounded-lg text-sm font-bold outline-none focus:bg-white focus:ring-1 focus:ring-blue-500" value={item.quantity} onChange={e=>updateBatchItem(i,'quantity',e.target.value)}/>
-                                                {showSuggestions && currentEditingIndex===i && <div className="absolute top-full left-0 w-full mt-1 bg-white shadow-xl rounded-xl z-50 border border-gray-100 max-h-32 overflow-y-auto">{filteredGoods.map(g=><div key={g} onMouseDown={(e)=>{e.preventDefault();updateBatchItem(i,'content',g);setShowSuggestions(false);}} className="p-2 border-b text-xs hover:bg-gray-50">{g}</div>)}</div>}
+                                                <input maxLength={66} className="flex-[1.6] bg-[#F2F2F7] px-3 py-2 rounded-[10px] text-[14px] font-medium outline-none focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all" placeholder="货物名" value={item.content} onFocus={()=>{setCurrentEditingIndex(i);setShowSuggestions(true);}} onChange={e=>updateBatchItem(i,'content',e.target.value)}/>
+                                                <input inputMode="numeric" className="flex-1 bg-[#F2F2F7] text-center rounded-[10px] text-[14px] font-bold outline-none focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all" value={item.quantity} onChange={e=>updateBatchItem(i,'quantity',e.target.value)}/>
+                                                {showSuggestions && currentEditingIndex===i && <div className="absolute top-full left-0 w-full mt-1 bg-white shadow-xl rounded-[12px] z-50 border border-gray-100 max-h-32 overflow-y-auto">{filteredGoods.map(g=><div key={g} onMouseDown={(e)=>{e.preventDefault();updateBatchItem(i,'content',g);setShowSuggestions(false);}} className="p-2 border-b border-gray-50 text-[13px] active:bg-gray-50 text-gray-700">{g}</div>)}</div>}
                                             </div>
-                                            <input className="w-full bg-gray-50 px-3 py-2 rounded-lg text-xs outline-none focus:bg-white focus:ring-1 focus:ring-blue-500 placeholder-gray-400" placeholder="备注..." value={item.note||''} onChange={e=>updateBatchItem(i,'note',e.target.value)}/>
+                                            <input maxLength={666} className="w-full bg-[#F2F2F7] px-3 py-2 rounded-[10px] text-[13px] outline-none focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all placeholder-gray-400" placeholder="备注..." value={item.note||''} onChange={e=>updateBatchItem(i,'note',e.target.value)}/>
                                         </div>
                                     </div>
                                 ))}
-                                {batchItems.length === 0 && <div className="text-center py-6 text-xs text-gray-300">暂无待录入条目</div>}
+                                {batchItems.length === 0 && <div className="text-center py-8 text-gray-300 text-[13px]">暂无条目</div>}
+                            </div>
+                            
+                            <div className="absolute bottom-0 left-0 right-0 p-5 bg-white border-t border-gray-100 safe-area-bottom pb-safe-bottom z-30">
+                                <button onClick={saveBatch} className="w-full bg-[#007AFF] text-white font-bold text-[17px] py-3.5 rounded-[16px] shadow-lg shadow-blue-200 active:scale-[0.98] transition-transform flex justify-center items-center">保存 ({batchItems.length})</button>
                             </div>
                         </div>
                     )}
