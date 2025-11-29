@@ -309,9 +309,30 @@
             const closeBatchModal = () => { setIsBatchModalOpen(false); setScannedImage(null); setBatchItems([]); };
             
             const confirmDelete = () => { setPackages(prev => prev.filter(p => p.id !== deleteTargetId)); setDeleteTargetId(null); };
+
+            // --- 优化后的备份导出函数 ---
             const exportBackup = () => {
-                try { const blob = new Blob([JSON.stringify({version:'2.0', packages, goodsList}, null, 2)], {type: 'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Backup_${new Date().toISOString().slice(0,10)}.json`; document.body.appendChild(a); a.click(); document.body.removeChild(a); } catch(e) { alert("备份失败"); }
+                try { 
+                    const blob = new Blob([JSON.stringify({version:'2.0', packages, goodsList}, null, 2)], {type: 'application/json'}); 
+                    const a = document.createElement('a'); 
+                    a.href = URL.createObjectURL(blob); 
+                    
+                    // 获取当前本地日期 yyyy-mm-dd
+                    const now = new Date();
+                    const year = now.getFullYear();
+                    const month = String(now.getMonth() + 1).padStart(2, '0');
+                    const day = String(now.getDate()).padStart(2, '0');
+                    const dateStr = `${year}-${month}-${day}`;
+                    
+                    // 命名格式：App名称_Backup_yyyy-mm-dd
+                    a.download = `ScanKuaid_Backup_${dateStr}.json`; 
+                    
+                    document.body.appendChild(a); 
+                    a.click(); 
+                    document.body.removeChild(a); 
+                } catch(e) { alert("备份失败"); }
             };
+
             const handleRestore = (e) => {
                 const reader = new FileReader(); reader.onload = (ev) => { try { const data = JSON.parse(ev.target.result); if (confirm(`恢复 ${data.packages?.length||0} 条数据？`)) { if(data.packages) setPackages(data.packages); if(data.goodsList) setGoodsList(data.goodsList); alert("恢复成功"); setIsSettingsOpen(false); } } catch(err) { alert("文件错误"); } }; if(e.target.files[0]) reader.readAsText(e.target.files[0]); e.target.value = '';
             };
